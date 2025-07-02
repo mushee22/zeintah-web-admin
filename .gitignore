@@ -1,0 +1,16 @@
+.vscode/
+.venv/
+.venv/
+env/
+.env/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+__pycache__/
+*.py[cod]
+*/migrations/*.pyc
+.env
+!*/migrations/__init__.py
+venv
+media
