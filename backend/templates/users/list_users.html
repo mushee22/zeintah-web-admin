@@ -1,0 +1,121 @@
+{% extends 'base.html' %}
+{% load static %}
+{% block content %}
+
+<div class="content">
+
+{% include 'navbar.html' %}
+
+<div class="main-container">
+    <div class="top-container">
+        <form action="{% url 'student_list' %}" method="GET" id="searchSortForm">
+            <!-- search -->
+            <input class="form-control border-1" type="search" placeholder="Search" name="search" id="searchBox" value="{{request.GET.search}}">
+
+            <!-- sort -->
+            <select class="form-control border-1 action-form-field" name="sort" id="sortBox">
+                {% if request.GET.sort == "oldest" %}
+                <option value="newest">Newest</option>
+                <option value="oldest" selected >Oldest</option>
+                {% else %}
+                <option value="newest" selected >Newest</option>
+                <option value="oldest">Oldest</option>
+                {% endif %}
+            </select>
+
+           
+
+        </form>
+        <a href="{% url 'create_admin_user' %}"><button type="submit" class="btn btn-primary">New +</button></a>
+    </div>
+    
+    {% include 'messages.html' %}
+
+    <div class="table-responsive">
+        <table class="table">
+            <thead>
+                <tr>
+                    <th scope="col">Sl No.</th>
+                    
+                    <th scope="col">First Name</th>
+                    <th scope="col">Last Name</th>
+                    <th scope="col">Email</th>
+                    
+                     
+                    <th scope="col">Actions</th>
+                   
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in context_data %}
+                <tr>
+                    <td>{{item.id}}</td>
+
+                    <td>{{item.first_name}}</td>
+                    <td>{{item.last_name}}</td>
+                    <td>{{item.email}}</td>
+                 
+                    <td>
+                        <div class="action-box">
+                            <a href="{% if item.id %}{% url 'update_admin_user' pk=item.id %}{% endif %}">
+                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+                                    <path d="M362.7 19.3L314.3 67.7 444.3 197.7l48.4-48.4c25-25 25-65.5 0-90.5L453.3 19.3c-25-25-65.5-25-90.5 0zm-71 71L58.6 323.5c-10.4 10.4-18 23.3-22.2 37.4L1 481.2C-1.5 489.7 .8 498.8 7 505s15.3 8.5 23.7 6.1l120.3-35.4c14.1-4.2 27-11.8 37.4-22.2L421.7 220.3 291.7 90.3z"/>
+                                </svg>
+                            </a>
+                            {% if context_data.is_superuser %}
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512" onclick="showDeletePopup('{{item.id}}','{{item.first_name}} {{item.last_name}}')">
+                                <path d="M135.2 17.7L128 32 32 32C14.3 32 0 46.3 0 64S14.3 96 32 96l384 0c17.7 0 32-14.3 32-32s-14.3-32-32-32l-96 0-7.2-14.3C307.4 6.8 296.3 0 284.2 0L163.8 0c-12.1 0-23.2 6.8-28.6 17.7zM416 128L32 128 53.2 467c1.6 25.3 22.6 45 47.9 45l245.8 0c25.3 0 46.3-19.7 47.9-45L416 128z"/>
+                            </svg>
+                            {% endif %}
+                        </div>
+                    </td>
+                    
+                </tr> 
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>  
+</div>
+
+
+<!-- pagination -->
+{% include 'pagination.html' %}
+
+</div>
+
+{% endblock %}
+
+{% block script %}
+<script>
+    
+    const handleSubmit = ()=>{
+        document.getElementById("searchSortForm").submit();
+    }
+
+    document.getElementById("searchBox").addEventListener('change',handleSubmit);
+    document.getElementById("sortBox").addEventListener('change',handleSubmit);
+    // document.getElementById("filterBox").addEventListener('change',handleSubmit);
+
+
+    // // delete labour
+    document.querySelector(".popup-delete-btn").addEventListener('click',()=>{
+        var deleteItem = document.querySelector('input[name="delete_id"]').value;
+        window.location.href = `{% url 'delete_admin_user' %}?pk=${deleteItem}`;
+    });
+
+
+    // labour status toggler function
+    {% comment %} let togglers = document.querySelectorAll(".status-toggle");
+    togglers.forEach(toggler=>{
+        toggler.addEventListener('change',(e)=>{
+            fetch(`{% url 'archive_case_studies' %}?pk=${e.target.id}`,{
+                'method':'GET'
+            }).then(resp=>resp.json()).then(data=>{
+                if(data.resp_code != 1){
+                    alert("Failed!!")
+                }
+            })
+        });
+    }); {% endcomment %}
+</script>
+{% endblock %}

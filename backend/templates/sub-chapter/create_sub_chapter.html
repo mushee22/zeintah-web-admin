@@ -1,0 +1,151 @@
+{% extends 'base.html' %}
+{% load static %}
+{% block content %}
+
+<div class="content">
+
+    {% include 'navbar.html' %}
+
+    <div class="main-container">
+        <div class="bread-crumb-container">
+            <a href="{% url 'sub_chapter_list' %}"><span class="parent">Sub Chapter</span></a>><span>Create</span>
+        </div>
+        <form method="POST" action="{% url 'create_sub_chapter' %}" enctype="multipart/form-data" id="CreateFormId">
+            {% csrf_token %}
+            <div class="mb-3">
+                <div class="form-label required">Image</div>
+                <label for="ImageField" class="image-box" style="background-image: url(/static/images/default-image.jpg);/"></label>
+                <input type="file" id="ImageField" name="thumbnail" style="opacity: 0; width: 0; height: 0; position: absolute;">
+            </div>
+            <div class="mb-3">
+                <label for="title" class="form-label required">Title</label>
+                <input type="text" class="form-control" id="title" name="title">
+            </div>
+           
+            <div class="mb-3">
+                <label for="chapter" class="form-label required">Chapter</label>
+                <select class="form-control" name="chapter" id="chapter">
+                    <option value="">--select a Chapter--</option>
+                    {% for item in chapters %}
+                    <option value="{{item.id}}">{{item.title}}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="mb-3">
+                <label for="description" class="form-label required">Description</label>
+                <textarea class="form-control" id="description" name="description" rows="4"></textarea>
+            </div>
+            <div class="mb-3">
+                <div class="form-label required">Video</div>
+                {% comment %} <label for="video" class="image-box" style="background-image: url(/static/images/video-placeholder.jpg);/"></label> {% endcomment %}
+                <input type="file" id="video" name="video" >
+            </div>
+             <div class="mb-3">
+                <label for="order" class="form-label required">Order</label>
+                <input type="number" placeholder="Sub Chapter order" class="form-control" id="order" name="order"></textarea>
+            </div>
+            <div class="mb-3">
+                <label for="duration" class="form-label required">Duration</label>
+                <input type="number" placeholder="In seconds" class="form-control" id="duration" name="duration"/>
+            </div>
+
+            <a href="{% url 'chapter_list' %}"><button type="button" class="btn btn-secondary">Cancel</button></a>
+            <button type="submit" class="btn btn-primary">Save</button>
+        </form>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block script %}
+<script src="{% static 'js/showSelectedImage.js' %}"></script>
+<script src="{% static 'js/validationMessageGenerator.js' %}"></script>
+<script>
+
+    $.validator.addMethod("requiredFile", function (value, element) {
+    return element.files && element.files.length > 0;
+  }, "This field is required");
+
+  // Custom method: validate image types
+  $.validator.addMethod("imageOnly", function (value, element) {
+    if (!element.files.length) return true;
+    const fileType = element.files[0].type;
+    return /^image\/(jpeg|png|jpg|gif)$/i.test(fileType);
+  }, "Only image files are allowed");
+
+  // Custom method: validate video types
+  $.validator.addMethod("videoOnly", function (value, element) {
+    if (!element.files.length) return true;
+    const fileType = element.files[0].type;
+    return /^video\/(mp4|webm|ogg|quicktime)$/i.test(fileType); // quicktime for .mov
+  }, "Only video files are allowed (mp4, webm, ogg, mov)");
+
+  // Custom method: validate file size
+  $.validator.addMethod("maxFileSize", function (value, element, param) {
+    if (!element.files.length) return true;
+    return element.files[0].size <= param;
+  }, "File size is too large");
+
+   $(document).ready(function () {
+    $("#CreateFormId").validate({
+      rules: {
+        thumbnail: {
+          requiredFile: true,
+          imageOnly: true,
+          maxFileSize: 3 * 1024 * 1024 // 3MB
+        },
+        video: {
+          requiredFile: true,
+          videoOnly: true,
+          maxFileSize: 100 * 1024 * 1024 // 100MB
+        },
+        title: {
+          required: true
+        },
+        chapter: {
+          required: true
+        },
+        description: {
+          required: true
+        },
+        order: {
+          required: true,
+          digits: true
+        },
+        duration: {
+          required: true,
+          digits: true
+        }
+      },
+      messages: {
+        thumbnail: {
+          requiredFile: "Please upload an image",
+          imageOnly: "Only images (jpg, jpeg, png, gif) are allowed",
+          maxFileSize: "Image must be less than 3MB"
+        },
+        video: {
+          requiredFile: "Please upload a video",
+          videoOnly: "Only video files (mp4, webm, ogg, mov) are allowed",
+          maxFileSize: "Video must be less than 100MB"
+        },
+        title: "Please enter a title",
+        chapter: "Please select a chapter",
+        description: "Please enter a description",
+        order: "Please enter a valid number for order",
+        duration: "Please enter duration in seconds"
+      },
+      errorClass: "text-danger",
+      errorElement: "small",
+      highlight: function (element) {
+        $(element).addClass("is-invalid");
+      },
+      unhighlight: function (element) {
+        $(element).removeClass("is-invalid");
+      },
+      submitHandler: function (form) {
+        form.submit();
+      }
+    });
+  });
+</script>
+{% endblock %}
