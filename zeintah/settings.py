@@ -31,7 +31,6 @@ DEBUG = config('DEBUG', cast=bool)
 ALLOWED_HOSTS = [
     "13.233.121.147",
     "127.0.0.1",
-    
 ]
 
 CSRF_TRUSTED_ORIGINS = [

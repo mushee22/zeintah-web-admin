@@ -645,6 +645,7 @@ class SubChapterUpdateView(LoginRequiredMixin, DetailView):
                     status = 'pending',
                     model_id = f"subchapter_{subChapter.id}",
                 )
+                 print("Calling Celery task...")
                  upload_subchapter_video_to_s3.delay(subChapter.id, temp_path, task.id)
                 
                 # subChapter.video= request.FILES.get("video")
