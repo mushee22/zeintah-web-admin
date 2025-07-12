@@ -30,6 +30,7 @@ DEBUG = config('DEBUG', cast=bool)
 
 ALLOWED_HOSTS = [
     "13.233.121.147",
+    "admin.zeitnahacademy.com",
     "127.0.0.1",
 ]
 
