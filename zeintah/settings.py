@@ -121,6 +121,9 @@ CORS_ALLOW_HEADERS = (
 
 WSGI_APPLICATION = "zeintah.wsgi.application"
 
+REST_FRAMEWORK = {
+    'PAGE_SIZE': 10
+}
 
 SIMPLE_JWT = {
     "ACCESS_TOKEN_LIFETIME": timedelta(days=365),

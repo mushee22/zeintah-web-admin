@@ -16,6 +16,7 @@ urlpatterns = [
     path('student-profile/update/', ProfileUpdateView.as_view(), name='student-profile-update'),
     path('student/update-profile-image/', UpdateStudentProfileImageView.as_view(), name='update-student-image'),
     path('student/update-password/', UpdateUserPassword.as_view(), name="update-student-password"),
+    path('student-details/<int:slug>/', StudentDetailsView.as_view(), name="student-details"),
     # Chapters 
     path('chapters/', ChapterListView.as_view(), name='chapter-list'),
     path('chapters/<int:slug>/subchapters/', SubChapterListView.as_view(), name='subchapter-list'),
@@ -24,5 +25,12 @@ urlpatterns = [
     path('total/progress/', TotalProgressView.as_view(), name='total-progress'),
     # Packages
     path('packages/', PackageListView.as_view(), name='package-list'),
-
+    #Categories
+    path('categories/', CategoryListView.as_view(), name="category-list"),
+    #Ideas
+    path('ideas/', IdeaListView.as_view(), name="ideas-list"), 
+    path('ideas/create/', IdeaCreateView.as_view(), name="idea-create"),
+    path('ideas/<int:slug>/', IdeaUpdateDeleteView.as_view(), name="idea-update"),
+    path('ideas/<int:slug>/like-toggle/', IdeaLikeView.as_view(), name="idea-like"),
+    path('ideas/<int:slug>/comments/', IdeaCommentListView.as_view(), name="idea-comments"),
 ]

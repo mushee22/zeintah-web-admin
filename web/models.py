@@ -91,11 +91,13 @@ class IdeaCategory(models.Model):
         return self.name
 
 class Idea(BasemodelMixin):
-    student = models.ForeignKey(Student, on_delete=models.CASCADE, related_name='student_ideas')
-    category = models.ForeignKey(IdeaCategory, on_delete=models.CASCADE, related_name='ideas')
-    title = models.CharField(max_length=200)
-    description = models.TextField()
-    thumbanil = models.ImageField(upload_to='ideas', null=True, blank=True)
+    student = models.ForeignKey(Student, on_delete=models.CASCADE, related_name='student_ideas', null= True, blank= True)
+    category = models.ForeignKey(IdeaCategory, on_delete=models.CASCADE, related_name='ideas', null= True, blank= True)
+    title = models.CharField(max_length=200, null=True, blank=True)
+    description = models.TextField(null=True, blank=True)
+    thumbnail = models.ImageField(upload_to='ideas', null=True, blank=True)
+    height = models.IntegerField(null=True, blank=True)
+    width = models.IntegerField(null=True, blank=True)
 
     def __str__(self):
         return f"{self.title} by {self.student.user.username}"

@@ -26,6 +26,7 @@ urlpatterns = [
     path('chapter/create/',ChapterCreateView.as_view(),name="create_chapter"),
     path('chapter/update/<int:pk>/',ChapterUpdateView.as_view(),name="update_chapter"),
     path('chapter/delete',ChapterDeleteView.as_view(),name="delete_chapter"),
+    path('chapter/<int:pk>/sub-chapter',ChapterSubChapterView.as_view(),name="list_chapter_sub_chapter"),
     #Sub Chapter
     path('sub-chapter',SubChapterListView.as_view(),name="sub_chapter_list"),
     path('sub-chapter/create/',SubChapterCreatView.as_view(),name="create_sub_chapter"),
@@ -44,4 +45,14 @@ urlpatterns = [
     path('package/update/<int:pk>/',PackageUpdateView.as_view(),name="update_package"),
     path('package/delete',PackageDeleteView.as_view(),name="delete_package"),
     path('package/<int:pk>/student',PackageStudentListView.as_view(),name="list_package_student"),
+    #Category
+    path('category',CategoryListView.as_view(), name="category_list"),
+    path('category/create/', CategoryCreateView.as_view(), name="create_category"),
+    path('category/update/<int:pk>', CategoryUpdateView.as_view(), name="update_category"),
+    path('category/delete',CategoryDeleteView.as_view(),name="delete_category"),
+    #Ideas
+    path('idea',IdeaListView.as_view(), name="idea_list"),
+    path('idea/create/', IdeaCreateView.as_view(), name="create_idea"),
+    path('idea/update/<int:pk>', IdeaUpdateView.as_view(), name="update_idea"),
+    path('idea/delete',IdeaDeleteView.as_view(),name="delete_idea"),
 ]

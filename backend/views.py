@@ -17,6 +17,7 @@ from django.contrib.contenttypes.models import ContentType
 from django.apps import apps
 from django.core.files.storage import default_storage
 from .tasks import upload_subchapter_video_to_s3
+from PIL import Image
 
 
 
@@ -152,6 +153,9 @@ class CreateAdminView(LoginRequiredMixin, TemplateView):
                 phone=request.POST.get("phone"),
                 is_admin=True,  # Set the user as admin
             )
+
+            Student.objects.create(user = user) 
+
             user.set_password(request.POST.get("password"))  # Hash the password
             user.save()
             messages.success(request, "Admin user created successfully.")
@@ -449,7 +453,22 @@ class ChapterListView(LoginRequiredMixin,ListView):
         #     queryset = queryset.filter(category=category_filter)
 
         return queryset
-    
+
+class ChapterSubChapterView(LoginRequiredMixin, ListView):
+    model = SubChapters
+    template_name = 'chapter/list_subchapter.html'
+    context_object_name = 'context_data'
+    paginate_by = 10
+
+    def get_queryset(self):
+        chapter_id = self.kwargs['pk']
+        return SubChapters.objects.filter(chapter_id=chapter_id)
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['chapter'] = Chapter.objects.get(pk=self.kwargs['pk'])
+        return context  
+
 class ChapterCreateView(LoginRequiredMixin, TemplateView):
     template_name = 'chapter/create_chapter.html'
 
@@ -582,27 +601,16 @@ class SubChapterCreatView(LoginRequiredMixin, TemplateView):
 
             chapter = Chapter.objects.get(id=request.POST.get("chapter"))
 
-            # Save temporarily
-            temp_path = default_storage.save(f'temp_subchapters/{video_file.name}', video_file)
-
             subchapter = SubChapters.objects.create(
                 title=request.POST.get("title"),
                 order=request.POST.get("order"),
                 duration=request.POST.get("duration"),
                 description=request.POST.get("description"),
                 thumbnail=request.FILES.get("thumbnail"),
-                chapter=chapter
+                video = video_file,
+                chapter=chapter,
+                
             )
-
-            # Create a background task to upload the video to S3
-
-            task = BackgroundTaskStatus.objects.create(
-                name = f"ADDINING {subchapter.title}",
-                status = 'pending',
-                model_id = f"subchapter_{subchapter.id}",
-            )
-             
-            upload_subchapter_video_to_s3.delay(subchapter.id, temp_path, task.id)
 
             messages.success(request, "Sub Chapter created successfully.")
             return redirect('sub_chapter_list')
@@ -639,16 +647,7 @@ class SubChapterUpdateView(LoginRequiredMixin, DetailView):
                 subChapter.thumbnail = request.FILES.get("thumbnail")
             if request.FILES.get("video"):
                  video_file = request.FILES.get("video")
-                 temp_path = default_storage.save(f'temp_subchapters/{video_file.name}', video_file)
-                 task = BackgroundTaskStatus.objects.create(
-                    name = f"UPDATING {subChapter.title}",
-                    status = 'pending',
-                    model_id = f"subchapter_{subChapter.id}",
-                )
-                 print("Calling Celery task...")
-                 upload_subchapter_video_to_s3.delay(subChapter.id, temp_path, task.id)
-                
-                # subChapter.video= request.FILES.get("video")
+                 subChapter.video = video_file
 
             subChapter.save()        
 
@@ -715,14 +714,7 @@ class PackageCreateView(LoginRequiredMixin, TemplateView):
             package = Package.objects.create(
                 title=request.POST.get("title"),
                 thumbnail=request.FILES.get("thumbnail"),
-                # price=request.POST.get("price"),
-                # offer=request.POST.get("offer")
             )
-            # features = request.POST.getlist("features")
-            # for feature in features:
-            #     feature_obj = Features.objects.get(id=feature)
-            #     package.features.add(feature_obj)
-
             messages.success(request, "Package created successfully.")
             return redirect('package_list')
 
@@ -770,3 +762,177 @@ class UploadStatusView(LoginRequiredMixin, TemplateView):
 
 
 #*********************************************************************************             
+class CategoryListView(LoginRequiredMixin, ListView):
+    model = IdeaCategory
+    template_name = 'category/list_category.html'
+    context_object_name = 'context_data'
+    paginate_by = 10
+
+    def get_queryset(self):
+        queryset =  super().get_queryset()
+        search = self.request.GET.get("search")
+        sort = self.request.GET.get("sort")
+
+        if search:
+            queryset = queryset.filter(
+                Q(name__istartswith=search))
+        
+        if sort == "oldest":
+            queryset = queryset.order_by('id')
+        else:
+            queryset = queryset.order_by('-id')
+
+        # if category_filter:
+        #     queryset = queryset.filter(category=category_filter)
+
+        return queryset   
+
+class CategoryCreateView(LoginRequiredMixin, TemplateView):
+    template_name = 'category/create_category.html'
+
+    def post(self, request):
+        try:
+            ideaCategory = IdeaCategory.objects.create(
+                name=request.POST.get("name"),
+                icon=request.FILES.get("icon"),
+                order=request.POST.get("order"),
+            )
+            messages.success(request, "Category created successfully.")
+            return redirect('category_list')
+
+        except Exception as e:
+            messages.error(request, f"Failed to create category: {str(e)}")
+            return redirect('category_list')  
+        
+class CategoryUpdateView(LoginRequiredMixin, DetailView):
+    template_name = 'category/update_category.html'
+    model = IdeaCategory
+    context_object_name ='context_data'
+
+    def post(self, request, pk):
+        ideaCategory = get_object_or_404(IdeaCategory, pk=pk)
+
+        try:
+            ideaCategory.name = request.POST.get("name")
+
+            if request.FILES.get("icon"):
+                ideaCategory.icon = request.FILES.get("icon")
+
+            ideaCategory.save()
+
+            messages.success(request, "Category updated successfully.")
+            return redirect('category_list')
+
+        except Exception as e:
+            messages.error(request, f"Failed to update category: {str(e)}")
+            return redirect('category_list')  
+
+class CategoryDeleteView(LoginRequiredMixin,DeleteMasterView):
+    model = IdeaCategory
+    return_path = 'category_list' 
+
+#*********************************************************************************     
+class IdeaListView(LoginRequiredMixin, ListView):
+    model = Idea
+    template_name= "idea/list_idea.html"
+    context_object_name = "context_data"
+    paginate_by = 10
+
+    def get_queryset(self):
+        queryset =  super().get_queryset()
+        search = self.request.GET.get("search")
+        sort = self.request.GET.get("sort")   
+
+        if search:
+            queryset = queryset.filter(
+                Q(title__istartswith = search)
+            )
+        if sort == "oldest":
+            queryset = queryset.order_by('id')
+        else:
+            queryset = queryset.order_by('-id')
+
+        return queryset    
+
+class IdeaCreateView(LoginRequiredMixin, TemplateView):
+    template_name = "idea/create_idea.html"
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['categories'] = IdeaCategory.objects.all()
+        return context
+
+    def post(self, request):
+        try:
+          
+           category = IdeaCategory.objects.get(id=request.POST.get("category_id"))
+           thumbnail = request.FILES.get('thumbnail')
+           height = width = None
+
+           if thumbnail:
+               image = Image.open(thumbnail)
+               height, width =  image.size
+               thumbnail.seek(0)
+
+           idea = Idea.objects.create(
+               title = request.POST.get('title'),
+               description = request.POST.get('description'),
+               thumbnail = thumbnail,
+               category = category,
+               height = height,
+               width = width
+           )
+           messages.success(request, "Idea created successfully.")
+           return redirect('idea_list')
+        except Exception as e:
+            messages.error(request, f"Failed to create Idea: {str(e)}")
+            return redirect('idea_list')  
+
+class IdeaUpdateView(LoginRequiredMixin, DetailView):
+    template_name = 'idea/update_idea.html'
+    model = Idea
+    context_object_name ='context_data'
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['categories'] = IdeaCategory.objects.all()
+        return context
+    
+    def post(self, request, pk):
+        try:
+            category = IdeaCategory.objects.get(id=request.POST.get("category_id"))
+        except Chapter.DoesNotExist:
+            messages.error(request, "Category does not exist.")
+            return redirect('idea_list')
+
+        try:
+            idea = get_object_or_404(Idea, pk=pk)
+            idea.title = request.POST.get("title")
+            idea.description = request.POST.get("description")
+            idea.category = category
+
+            if request.FILES.get("thumbnail"):
+                thumbnail = request.FILES.get('thumbnail')
+                height = width = None  
+
+                if thumbnail:
+                    image = Image.open(thumbnail)
+                    height, width =  image.size
+                    thumbnail.seek(0)
+
+                idea.thumbnail = thumbnail
+                idea.height = height
+                idea.width = width
+           
+            idea.save()        
+
+            messages.success(request, "Idea Updated successfully.")
+            return redirect('idea_list')
+
+        except Exception as e:
+            messages.error(request, f"Failed to update: {str(e)}")
+            return redirect('idea_list')
+
+class IdeaDeleteView(LoginRequiredMixin, DeleteMasterView):
+    model = Idea
+    return_path = 'idea_list' 

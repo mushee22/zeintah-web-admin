@@ -5,6 +5,7 @@ from django.shortcuts import get_object_or_404
 from rest_framework.exceptions import AuthenticationFailed
 # model imports
 from web.models import *
+from PIL import Image
 
 
 class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
@@ -282,5 +283,78 @@ class PackageSerializer(serializers.ModelSerializer):
         model = Package
         fields = ['id', 'title', 'thumbnail', 'price', 'offer', 'features']
 
+
+class CategorySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = IdeaCategory
+        fields = '__all__'
+
+
+class IdeaSerializer(serializers.ModelSerializer):
+    student = PersonalProfileSerilizer(read_only=True)
+    category = CategorySerializer(read_only=True)
+    comment_count = serializers.IntegerField(read_only=True)
+    like_count = serializers.IntegerField(read_only=True)
+    is_liked = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Idea
+        fields = '__all__'
+
+    def get_is_liked(self, obj):
+        request = self.context.get('request')
+        if not request or not request.user.is_authenticated:
+            return False
+
+        try:
+            student = Student.objects.get(user=request.user)
+        except Student.DoesNotExist:
+            return False
+
+        return obj.likes.filter(student=student).exists()
+
+    def create(self, validated_data):
+        request = self.context.get('request')
+        student = None
+        if request and hasattr(request, 'user'):
+            try:
+                student = Student.objects.get(user=request.user)
+            except Student.DoesNotExist:
+                raise serializers.ValidationError("Student profile not found for this user.")
+        else:
+            raise serializers.ValidationError("Request user not found.")
+
+        # Remove nested fields if present
+        validated_data.pop('student', None)
+        validated_data.pop('category', None)
+
+        thumbnail = validated_data.get('thumbnail')
+        if thumbnail:
+            try:
+                image = Image.open(thumbnail)
+                validated_data['width'], validated_data['height'] = image.size
+                thumbnail.seek(0)  # Reset pointer so Django can save it
+            except Exception:
+                raise serializers.ValidationError("Image size is not gettin")
+
+        idea = Idea.objects.create(student=student, **validated_data)
+        return idea    
         
 
+class PaginationSerializer(serializers.Serializer):
+    """Common pagination metadata serializer"""
+    count = serializers.IntegerField(help_text="Total number of items")
+    next = serializers.URLField(allow_null=True, help_text="URL for next page")
+    previous = serializers.URLField(allow_null=True, help_text="URL for previous page")
+    current_page = serializers.IntegerField(help_text="Current page number")
+    total_pages = serializers.IntegerField(help_text="Total number of pages")
+    page_size = serializers.IntegerField(help_text="Number of items per page")
+    has_next = serializers.BooleanField(help_text="Whether next page exists")
+    has_previous = serializers.BooleanField(help_text="Whether previous page exists")
+
+class IdeaCommentSerializer(serializers.ModelSerializer):
+    student = PersonalProfileSerilizer(read_only=True)
+
+    class Meta:
+        model = IdeaComment
+        fields = '__all__'   
