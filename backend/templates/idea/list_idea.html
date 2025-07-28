@@ -47,7 +47,7 @@
               <th scope="col">Thumbnail</th>
               <th scope="col">Title</th>
               <th scope="col">Description</th>
-              <th scope="col">Category</th>
+              <!-- <th scope="col">Category</th> -->
               <th scope="col">Author</th>
               <th scope="col">Actions</th>
             </tr>
@@ -78,8 +78,16 @@
               </td>
               {% endif %}
               <td>{{item.title}}</td>
-              <td>{{item.description}}</td>
-              <td>{{item.category.name}}</td>
+              <td class="description-cell">
+                <div class="description-content">
+                  {{item.description}}
+                  {% if item.description|length > 100 %}
+                    <div class="description-fade"></div>
+                  {% endif %}
+                </div>
+              </td>
+          
+              <!-- <td>{{item.category.name}}</td> -->
               {% if item.student %}
               <td>{{item.student.user.first_name}}</td>
               {% else %}

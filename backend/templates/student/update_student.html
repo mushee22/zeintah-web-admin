@@ -51,12 +51,11 @@
                 </select>
             </div>
             <div class="mb-3">
-                <label for="start_date" class="form-label required">Start Date ({{context_data.start_date}})</label>
-
+                <label for="start_date" class="form-label">Start Date ({{context_data.start_date}})</label>
                 <input type="date" class="form-control" id="start_date" name="start_date">
             </div>
             <div class="mb-3">
-                <label for="end_date" class="form-label required">End Date ({{context_data.end_date}})</label>
+                <label for="end_date" class="form-label">End Date ({{context_data.end_date}})</label>
                 <input type="date" class="form-control" id="end_date" name="end_date">
             </div>
             <a href="{% url 'student_list' %}"><button type="button" class="btn btn-secondary">Cancel</button></a>
@@ -93,8 +92,8 @@
         phone: { required: true, digits: true },
         batch: { required: true },
         package: { required: true },
-        start_date: { required: true, startBeforeEnd: true },
-        end_date: { required: true }
+        start_date: { required: false, startBeforeEnd: true },
+        end_date: { required: false }
       },
       messages: {
         first_name: "Please enter first name",
@@ -105,10 +104,9 @@
         batch: "Please select a batch",
         package: "Please select a course",
         start_date: {
-          required: "Please enter start date",
           startBeforeEnd: "Start date must be before end date"
         },
-        end_date: "Please enter end date"
+        end_date: ""
       },
       errorClass: "text-danger",
       errorElement: "small",

@@ -56,6 +56,7 @@
     <!-- custom css -->
     <link href="{% static 'css/custom.css' %}" rel="stylesheet" />
     <link href="{% static 'css/toggler.css' %}" rel="stylesheet" />
+    <link href="{% static 'css/description-fix.css' %}" rel="stylesheet" />
 
     <style>
       #loading-overlay {
@@ -120,7 +121,7 @@
               href="{% url 'admin_user_list' %}"
               class="nav-item nav-link"
               onclick="clickMenu(this)"
-              ><i class="fa fa-solid fa-user me-2"></i>Users</a
+              ><i class="fa fa-solid fa-user me-2"></i>Admins</a
             >
             {% comment %}
             <a
@@ -130,25 +131,25 @@
               ><i class="fa fa-solid fa-tachometer-alt me-2"></i>Role</a
             >
             {% endcomment %}
-            <a
+            <!-- <a
               href="{% url 'student_list' %}"
               class="nav-item nav-link"
               onclick="clickMenu(this)"
             >
-              <i class="fa-solid fa-user-tie"></i>Students</a
-            >
+              <i class="fa-solid fa-user-tie me-2"></i>Students</a
+            > -->
             <a
               href="{% url 'chapter_list' %}"
               class="nav-item nav-link"
               onclick="clickMenu(this)"
               ><i class="fa fa-solid fa-folder me-2"></i>Chapter</a
             >
-            <a
+            <!-- <a
               href="{% url 'sub_chapter_list' %}"
               class="nav-item nav-link"
               onclick="clickMenu(this)"
               ><i class="fa fa-solid fa-book me-2"></i>Sub Chapter</a
-            >
+            > -->
             <a
               href="{% url 'batch_list' %}"
               class="nav-item nav-link"
@@ -160,21 +161,21 @@
               class="nav-item nav-link"
               onclick="clickMenu(this)"
             >
-              <i class="fa-solid fa-graduation-cap"></i>Course</a
+              <i class="fa-solid fa-graduation-cap me-2"></i>Course</a
             >
-            <a
+            {% comment %} <a
               href="{% url 'category_list' %}"
               class="nav-item nav-link"
               onclick="clickMenu(this)"
             >
               <i class="fa-solid fa-graduation-cap"></i>Category</a
-            >
+            > {% endcomment %}
             <a
               href="{% url 'idea_list' %}"
               class="nav-item nav-link"
               onclick="clickMenu(this)"
             >
-              <i class="fa-solid fa-graduation-cap"></i>Ideas</a
+              <i class="fa-solid fa-lightbulb me-2"></i>Ideas</a
             >
             {% comment %} <a
               href="{% url 'upload_status' %}"

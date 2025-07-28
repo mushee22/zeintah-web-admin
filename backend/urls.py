@@ -29,7 +29,7 @@ urlpatterns = [
     path('chapter/<int:pk>/sub-chapter',ChapterSubChapterView.as_view(),name="list_chapter_sub_chapter"),
     #Sub Chapter
     path('sub-chapter',SubChapterListView.as_view(),name="sub_chapter_list"),
-    path('sub-chapter/create/',SubChapterCreatView.as_view(),name="create_sub_chapter"),
+    path('sub-chapter/<int:pk>/create/',SubChapterCreatView.as_view(),name="create_sub_chapter"),
     path('sub-chapter/update/<int:pk>/',SubChapterUpdateView.as_view(),name="update_sub_chapter"),
     path('sub-chapter/delete',SubChapterDeleteView.as_view(),name="delete_sub_chapter"),
     path('sub-chapter/upload-status',UploadStatusView.as_view(),name="upload_status"),

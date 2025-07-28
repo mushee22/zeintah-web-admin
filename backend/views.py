@@ -302,6 +302,15 @@ class StudentCreateView(LoginRequiredMixin, TemplateView):
         context = super().get_context_data(**kwargs)
         context['batches'] = Batch.objects.all()
         context['packages'] = Package.objects.all()
+        
+        # Handle pre-selected batch from URL parameter
+        batch_id = self.request.GET.get('batch')
+        if batch_id:
+            try:
+                context['selected_batch'] = Batch.objects.get(id=batch_id)
+            except Batch.DoesNotExist:
+                context['selected_batch'] = None
+        
         return context
 
     def post(self, request):
@@ -347,11 +356,11 @@ class StudentCreateView(LoginRequiredMixin, TemplateView):
             )
 
             messages.success(request, "Student created successfully.")
-            return redirect('student_list')
+            return redirect('list_batch_student', pk=batch.id)
 
         except Exception as e:
             messages.error(request, f"Failed to create student: {str(e)}")
-            return redirect('student_list')
+            return redirect('list_batch_student', pk=batch.id)
        
 class StudentUpdateView(LoginRequiredMixin, DetailView):
     template_name = 'student/update_student.html'
@@ -414,11 +423,13 @@ class StudentUpdateView(LoginRequiredMixin, DetailView):
             student.save()
 
             messages.success(request, "Student details updated successfully.")
-            return redirect('student_list')
+            # return redirect('student_list')
+            return redirect('list_batch_student', pk=batch.id)
 
         except Exception as e:
             messages.error(request, f"Failed to update student: {str(e)}")
-            return redirect('student_list')
+            # return redirect('student_list')
+            return redirect('list_batch_student', pk=batch.id)
         
 class StudentDeleteView(LoginRequiredMixin,DeleteMasterView):
     model = Student
@@ -528,6 +539,25 @@ class BatchListView(LoginRequiredMixin,ListView):
     context_object_name = 'context_data'
     paginate_by = 10
 
+    def get_queryset(self):
+        queryset = super().get_queryset()
+
+        search = self.request.GET.get("search")
+        sort = self.request.GET.get("sort")
+
+        if search:
+            queryset = queryset.filter(
+                Q(name__istartswith=search) |
+                Q(code__istartswith=search)
+            )
+        
+        if sort == "oldest":
+            queryset = queryset.order_by('id')
+        else:
+            queryset = queryset.order_by('-id')
+
+        return queryset
+
 class BatchStudentListView(LoginRequiredMixin, ListView):
     model = Student
     template_name = 'batch/list_student.html'
@@ -579,6 +609,18 @@ class BacthDeleteView(LoginRequiredMixin,DeleteMasterView):
     model = Batch
     return_path = 'batch_list' 
 
+    def get(self, request):
+        pk = request.GET.get('pk')
+        batch_id = request.GET.get('batch_id')
+        if self.model.objects.filter(id=pk).exists():
+            queryset = self.model.objects.get(id=pk)
+            queryset.delete()
+            messages.success(request, "Deleted successfully")
+            if batch_id:
+                return redirect('list_batch_student', pk=batch_id)
+            else:
+                return redirect('batch_list')
+
 #*************************************************************************
 class SubChapterListView(LoginRequiredMixin, ListView):
     model = SubChapters
@@ -586,20 +628,32 @@ class SubChapterListView(LoginRequiredMixin, ListView):
     context_object_name= "context_data"
     paginate_by = 10
 
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        # Check if we're filtering by a specific chapter
+        chapter_id = self.request.GET.get('chapter')
+        if chapter_id:
+            try:
+                context['chapter'] = Chapter.objects.get(pk=chapter_id)
+            except Chapter.DoesNotExist:
+                context['chapter'] = None
+        return context
+
 class SubChapterCreatView(LoginRequiredMixin, TemplateView):
     template_name="sub-chapter/create_sub_chapter.html"
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context['chapters'] = Chapter.objects.all()
+        context['pk'] = self.kwargs.get('pk')
         return context
 
-    def post(self, request):
+    def post(self, request, pk):
         try:
             
             video_file = request.FILES.get("video")
 
-            chapter = Chapter.objects.get(id=request.POST.get("chapter"))
+            chapter = Chapter.objects.get(id=pk)
 
             subchapter = SubChapters.objects.create(
                 title=request.POST.get("title"),
@@ -613,10 +667,10 @@ class SubChapterCreatView(LoginRequiredMixin, TemplateView):
             )
 
             messages.success(request, "Sub Chapter created successfully.")
-            return redirect('sub_chapter_list')
+            return redirect('list_chapter_sub_chapter', pk=pk)
         except Exception as e:
             messages.error(request, f"Failed to create Sub Chapter: {str(e)}")   
-            return redirect('sub_chapter_list') 
+            return redirect('list_chapter_sub_chapter', pk=pk) 
         
 class SubChapterUpdateView(LoginRequiredMixin, DetailView):
     template_name = 'sub-chapter/update_sub_chapter.html'
@@ -652,16 +706,36 @@ class SubChapterUpdateView(LoginRequiredMixin, DetailView):
             subChapter.save()        
 
             messages.success(request, "Sub Chapter Updated successfully.")
-            return redirect('sub_chapter_list')
+            return redirect('list_chapter_sub_chapter', pk=chapter.id)
 
         except Exception as e:
             messages.error(request, f"Failed to update: {str(e)}")
-            return redirect('sub_chapter_list')
+            return redirect('list_chapter_sub_chapter', pk=chapter.id)
         
 class SubChapterDeleteView(LoginRequiredMixin,DeleteMasterView):
     model = SubChapters
-    return_path = 'sub_chapter_list'  
+    return_path = 'list_chapter_sub_chapter'
+    
+    def get(self, request):
+        pk = request.GET.get('pk')
+        chapter_id = request.GET.get('chapter_id')  # Get the chapter ID from the request
+        
+        if self.model.objects.filter(id=pk).exists():
+            queryset = self.model.objects.get(id=pk)
+            try:
+                queryset.delete()
+                messages.success(request, "Deleted successfully")
+            except:
+                messages.error(request, "Failed to delete")
+        else:
+            messages.error(request, "Object doesn't exist")
 
+        # Redirect back to the chapter's sub-chapter list with the chapter ID
+        if chapter_id:
+            return redirect(self.return_path, pk=chapter_id)
+        else:
+            return redirect('chapter_list')  # Fallback to chapter list if no chapter_id
+   
 #*********************************************************************************
 
 class PackageListView(LoginRequiredMixin, ListView):
@@ -865,7 +939,7 @@ class IdeaCreateView(LoginRequiredMixin, TemplateView):
     def post(self, request):
         try:
           
-           category = IdeaCategory.objects.get(id=request.POST.get("category_id"))
+        #    category = IdeaCategory.objects.get(id=request.POST.get("category_id"))
            thumbnail = request.FILES.get('thumbnail')
            height = width = None
 
@@ -878,7 +952,7 @@ class IdeaCreateView(LoginRequiredMixin, TemplateView):
                title = request.POST.get('title'),
                description = request.POST.get('description'),
                thumbnail = thumbnail,
-               category = category,
+            #    category = category,
                height = height,
                width = width
            )
@@ -899,17 +973,17 @@ class IdeaUpdateView(LoginRequiredMixin, DetailView):
         return context
     
     def post(self, request, pk):
-        try:
-            category = IdeaCategory.objects.get(id=request.POST.get("category_id"))
-        except Chapter.DoesNotExist:
-            messages.error(request, "Category does not exist.")
-            return redirect('idea_list')
+        # try:
+        #     category = IdeaCategory.objects.get(id=request.POST.get("category_id"))
+        # except Chapter.DoesNotExist:
+        #     messages.error(request, "Category does not exist.")
+        #     return redirect('idea_list')
 
         try:
             idea = get_object_or_404(Idea, pk=pk)
             idea.title = request.POST.get("title")
             idea.description = request.POST.get("description")
-            idea.category = category
+            # idea.category = category
 
             if request.FILES.get("thumbnail"):
                 thumbnail = request.FILES.get('thumbnail')

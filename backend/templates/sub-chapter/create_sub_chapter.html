@@ -10,7 +10,7 @@
         <div class="bread-crumb-container">
             <a href="{% url 'sub_chapter_list' %}"><span class="parent">Sub Chapter</span></a>><span>Create</span>
         </div>
-        <form method="POST" action="{% url 'create_sub_chapter' %}" enctype="multipart/form-data" id="CreateFormId">
+        <form method="POST" action="{% url 'create_sub_chapter' pk=pk %}" enctype="multipart/form-data" id="CreateFormId">
             {% csrf_token %}
             <div class="mb-3">
                 <div class="form-label required">Image</div>
@@ -21,16 +21,7 @@
                 <label for="title" class="form-label required">Title</label>
                 <input type="text" class="form-control" id="title" name="title">
             </div>
-           
-            <div class="mb-3">
-                <label for="chapter" class="form-label required">Chapter</label>
-                <select class="form-control" name="chapter" id="chapter">
-                    <option value="">--select a Chapter--</option>
-                    {% for item in chapters %}
-                    <option value="{{item.id}}">{{item.title}}</option>
-                    {% endfor %}
-                </select>
-            </div>
+ 
             <div class="mb-3">
                 <label for="description" class="form-label required">Description</label>
                 <textarea class="form-control" id="description" name="description" rows="4"></textarea>
@@ -109,9 +100,7 @@
         title: {
           required: true
         },
-        chapter: {
-          required: true
-        },
+        
         description: {
           required: true
         },
@@ -136,7 +125,6 @@
           maxFileSize: "Video must be less than 100MB"
         },
         title: "Please enter a title",
-        chapter: "Please select a chapter",
         description: "Please enter a description",
         order: "Please enter a valid number for order",
         duration: "Please enter duration in seconds"
