@@ -57,13 +57,7 @@ class SubChapters(BasemodelMixin):
     title = models.CharField(max_length=200)
     description = models.TextField(null=True,blank=True)
 
-    video = models.FileField(
-        upload_to= video_upload_path,
-        storage=video_storage,
-        null=True,
-        blank=True
-    )
-    
+    video = models.FileField(upload_to='subchapters/videos',storage=video_storage)
     thumbnail = models.ImageField(upload_to='chapters/subchapters')
     duration = models.IntegerField(null=True,blank=True)
     order = models.IntegerField()
