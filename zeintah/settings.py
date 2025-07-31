@@ -226,9 +226,30 @@ if not DEBUG:
     AWS_S3_REGION_NAME = config('AWS_S3_REGION_NAME')  # e.g., 'us-east-1'
     AWS_S3_CUSTOM_DOMAIN = f'{AWS_STORAGE_BUCKET_NAME}.s3.amazonaws.com'
     DEFAULT_FILE_STORAGE = config('DEFAULT_FILE_STORAGE')
+
+    # Add these S3 optimizations
+    AWS_S3_FILE_OVERWRITE = False
+    AWS_DEFAULT_ACL = None
+    AWS_S3_VERIFY = True
+    AWS_S3_USE_SSL = True
+
+    # Optimize multipart uploads
+    AWS_S3_MULTIPART_THRESHOLD = 1024 * 25  # 25MB
+    AWS_S3_MULTIPART_CHUNKSIZE = 1024 * 25  # 25MB chunks
+    AWS_S3_MAX_MEMORY_SIZE = 1024 * 250
+
+    # Connection pooling
+    AWS_S3_MAX_POOL_CONNECTIONS = 50
+
 else:    
     MEDIA_URL = '/media/'
     MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
+
+# Increase file upload limits
+FILE_UPLOAD_MAX_MEMORY_SIZE = 5242880      # 5MB (files larger than this go to temp files)
+DATA_UPLOAD_MAX_MEMORY_SIZE = 262144000    # 250MB max upload size
+FILE_UPLOAD_TEMP_DIR = None                # Use system temp dir
+FILE_UPLOAD_PERMISSIONS = 0o644
 
 STATICFILES_DIRS = [
     os.path.join(BASE_DIR, 'static'),
