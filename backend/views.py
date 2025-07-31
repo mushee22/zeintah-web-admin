@@ -1010,3 +1010,15 @@ class IdeaUpdateView(LoginRequiredMixin, DetailView):
 class IdeaDeleteView(LoginRequiredMixin, DeleteMasterView):
     model = Idea
     return_path = 'idea_list' 
+
+
+class MediaUploadTemplateView(LoginRequiredMixin, TemplateView):
+    """
+    Template view for rendering the media upload interface
+    """
+    template_name = 'media_upload.html'
+    
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['page_title'] = 'Video Upload'
+        return context 

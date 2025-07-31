@@ -591,3 +591,143 @@ class TotalProgressView(LoginRequiredMixin, APIView):
             }, status=status.HTTP_404_NOT_FOUND)
 
 
+
+class MediaUploadView(APIView):
+    """
+    View for uploading media files directly to S3
+    """
+    parser_classes = [MultiPartParser, FormParser]
+    
+    def post(self, request):
+        try:
+            # Get the uploaded file
+            uploaded_file = request.FILES.get('file')
+            title = request.data.get('title', 'Untitled')
+            
+            if not uploaded_file:
+                return Response({
+                    "message": "No file provided",
+                    "resp_code": 0
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Validate file type (video files)
+            allowed_types = ['video/mp4', 'video/avi', 'video/mov', 'video/wmv', 'video/flv', 'video/webm']
+            if uploaded_file.content_type not in allowed_types:
+                return Response({
+                    "message": "Invalid file type. Only video files are allowed.",
+                    "resp_code": 0
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Validate file size (max 500MB)
+            max_size = 500 * 1024 * 1024  # 500MB
+            if uploaded_file.size > max_size:
+                return Response({
+                    "message": "File size too large. Maximum size is 500MB.",
+                    "resp_code": 0
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Create Media object
+            media = Media.objects.create(
+                title=title,
+                file=uploaded_file
+            )
+            
+            # Serialize the response
+            serializer = MediaSerializer(media, context={'request': request})
+            
+            return Response({
+                "message": "Video uploaded successfully",
+                "resp_code": 1,
+                "data": serializer.data
+            }, status=status.HTTP_201_CREATED)
+            
+        except Exception as e:
+            return Response({
+                "message": f"Upload failed: {str(e)}",
+                "resp_code": 0
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+    def get(self, request):
+        """
+        Get list of uploaded media files
+        """
+        try:
+            media_files = Media.objects.all().order_by('-created_date')
+            serializer = MediaSerializer(media_files, many=True, context={'request': request})
+            
+            return Response({
+                "message": "Media files retrieved successfully",
+                "resp_code": 1,
+                "data": serializer.data
+            }, status=status.HTTP_200_OK)
+            
+        except Exception as e:
+            return Response({
+                "message": f"Failed to retrieve media files: {str(e)}",
+                "resp_code": 0
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class MediaDetailView(LoginRequiredMixin, APIView):
+    """
+    View for getting, updating, and deleting specific media files
+    """
+    
+    def get_object(self, pk):
+        try:
+            return Media.objects.get(pk=pk)
+        except Media.DoesNotExist:
+            return None
+    
+    def get(self, request, pk):
+        media = self.get_object(pk)
+        if not media:
+            return Response({
+                "message": "Media file not found",
+                "resp_code": 0
+            }, status=status.HTTP_404_NOT_FOUND)
+        
+        serializer = MediaSerializer(media, context={'request': request})
+        return Response({
+            "message": "Media file retrieved successfully",
+            "resp_code": 1,
+            "data": serializer.data
+        }, status=status.HTTP_200_OK)
+    
+    def put(self, request, pk):
+        media = self.get_object(pk)
+        if not media:
+            return Response({
+                "message": "Media file not found",
+                "resp_code": 0
+            }, status=status.HTTP_404_NOT_FOUND)
+        
+        serializer = MediaSerializer(media, data=request.data, partial=True, context={'request': request})
+        if serializer.is_valid():
+            serializer.save()
+            return Response({
+                "message": "Media file updated successfully",
+                "resp_code": 1,
+                "data": serializer.data
+            }, status=status.HTTP_200_OK)
+        
+        return Response({
+            "message": serializer.errors,
+            "resp_code": 0
+        }, status=status.HTTP_400_BAD_REQUEST)
+    
+    def delete(self, request, pk):
+        media = self.get_object(pk)
+        if not media:
+            return Response({
+                "message": "Media file not found",
+                "resp_code": 0
+            }, status=status.HTTP_404_NOT_FOUND)
+        
+        media.delete()
+        return Response({
+            "message": "Media file deleted successfully",
+            "resp_code": 1
+        }, status=status.HTTP_200_OK)
+
+

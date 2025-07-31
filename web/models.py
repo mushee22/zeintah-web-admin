@@ -140,3 +140,9 @@ class IdeaLike(BasemodelMixin):
     def __str__(self):
         return f"{self.student.user.username} liked {self.idea.title}"
 
+class Media(BasemodelMixin):
+    title = models.CharField(max_length=200)
+    file = models.FileField(upload_to='media', storage=video_storage, null=True, blank=True)
+
+    def __str__(self):
+        return f"{self.title}"

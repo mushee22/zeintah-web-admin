@@ -33,4 +33,7 @@ urlpatterns = [
     path('ideas/<int:slug>/', IdeaUpdateDeleteView.as_view(), name="idea-update"),
     path('ideas/<int:slug>/like-toggle/', IdeaLikeView.as_view(), name="idea-like"),
     path('ideas/<int:slug>/comments/', IdeaCommentListView.as_view(), name="idea-comments"),
+    # Media upload
+    path('media/upload/', MediaUploadView.as_view(), name="media-upload"),
+    path('media/<int:pk>/', MediaDetailView.as_view(), name="media-detail"),
 ]

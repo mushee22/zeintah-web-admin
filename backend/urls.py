@@ -55,4 +55,6 @@ urlpatterns = [
     path('idea/create/', IdeaCreateView.as_view(), name="create_idea"),
     path('idea/update/<int:pk>', IdeaUpdateView.as_view(), name="update_idea"),
     path('idea/delete',IdeaDeleteView.as_view(),name="delete_idea"),
+    # Media Upload
+    path('media/upload/', MediaUploadTemplateView.as_view(), name="media_upload_template"),
 ]
