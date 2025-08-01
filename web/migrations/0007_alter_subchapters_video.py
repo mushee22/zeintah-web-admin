@@ -14,6 +14,6 @@ class Migration(migrations.Migration):
         migrations.AlterField(
             model_name='subchapters',
             name='video',
-            field=models.FileField(blank=True, null=True, upload_to=web.models.video_upload_path),
+            field=models.FileField(blank=True, null=True, upload_to='subchapters/videos'),
         ),
     ]

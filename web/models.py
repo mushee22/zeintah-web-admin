@@ -1,24 +1,7 @@
 from django.db import models
 from baseapp.models import BasemodelMixin
 from backend.models import CustomUser
-from django.conf import settings
-
-if not settings.DEBUG:
-    from backend.storage import OptimizedImageStorage, OptimizedVideoStorage
-    video_storage = OptimizedVideoStorage()
-    image_storage = OptimizedImageStorage()
-else:
-    video_storage = None
-    image_storage = None
-
-def video_upload_path(instance, filename):
-    """Generate upload path for videos"""
-    return f'subchapters/{instance.chapter.id}/{instance.id}/video_{filename}'
-
-
-def thumbnail_upload_path(instance, filename):
-    """Generate upload path for thumbnails"""
-    return f'subchapters/{instance.chapter.id}/{instance.id}/thumb_{filename}'    
+   
 
 
 # Create your models here.
@@ -56,8 +39,7 @@ class SubChapters(BasemodelMixin):
     chapter = models.ForeignKey(Chapter,on_delete=models.CASCADE,related_name="sub_chapter")
     title = models.CharField(max_length=200)
     description = models.TextField(null=True,blank=True)
-
-    video = models.FileField(upload_to='subchapters/videos',storage=video_storage, null=True, blank=True)
+    video = models.FileField(upload_to='subchapters/videos', null = True, blank = True)
     thumbnail = models.ImageField(upload_to='chapters/subchapters')
     duration = models.IntegerField(null=True,blank=True)
     order = models.IntegerField()
@@ -142,7 +124,7 @@ class IdeaLike(BasemodelMixin):
 
 class Media(BasemodelMixin):
     title = models.CharField(max_length=200)
-    file = models.FileField(upload_to='media', storage=video_storage, null=True, blank=True)
+    
 
     def __str__(self):
         return f"{self.title}"
