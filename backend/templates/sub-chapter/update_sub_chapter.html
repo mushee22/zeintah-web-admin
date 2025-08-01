@@ -282,11 +282,13 @@
                     $('#upload-status-text').text('Upload completed successfully!');
                     $('.progress-bar').removeClass('bg-danger').addClass('bg-success');
                     $('#video-upload-btn').text('Video Uploaded ✓').addClass('btn-success').removeClass('btn-warning btn-outline-primary');
+                    console.log('Upload completed successfully:', uploadedVideoUrl);
                     resolve(uploadedVideoUrl);
                 } else {
                     const error = 'Upload failed: ' + xhr.statusText;
                     $('#upload-status-text').text(error);
                     $('.progress-bar').addClass('bg-danger');
+                    console.error('Upload failed with status:', xhr.status);
                     reject(new Error(error));
                 }
             });
@@ -357,16 +359,23 @@
           uploadVideoToS3(currentFile)
             .then(function(url) {
               // Upload successful, submit form
-              form.submit();
+              console.log('Upload completed, submitting form...');
+              
+              // Add a small delay to ensure UI updates
+              setTimeout(function() {
+                form.submit();
+              }, 500);
             })
             .catch(function(error) {
               // Upload failed, hide loading and show error
               $("#loading-overlay").hide();
+              console.error('Upload failed:', error);
               alert('Video upload failed: ' + error.message);
               return false;
             });
         } else {
           // No new video selected or video already uploaded, submit form
+          console.log('Video already uploaded or no new video, submitting form...');
           $("#loading-overlay").show();
           form.submit();
         }
