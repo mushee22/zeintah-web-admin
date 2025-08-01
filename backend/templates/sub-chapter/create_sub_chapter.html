@@ -211,6 +211,13 @@
                     if (xhr.responseJSON && xhr.responseJSON.error) {
                         errorMessage = xhr.responseJSON.error;
                     }
+                    console.error('S3 Upload Error Details:', {
+                        status: xhr.status,
+                        statusText: xhr.statusText,
+                        responseText: xhr.responseText,
+                        responseJSON: xhr.responseJSON,
+                        error: error
+                    });
                     $('#upload-status-text').text(errorMessage);
                     $('.progress-bar').addClass('bg-danger');
                     reject(new Error(errorMessage));

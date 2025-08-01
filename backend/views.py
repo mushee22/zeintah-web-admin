@@ -1039,26 +1039,68 @@ class S3PresignedURLView(LoginRequiredMixin, APIView):
     """
     API view to generate S3 presigned URLs for direct file uploads
     """
+    def get(self, request):
+        """Simple test endpoint to check if API is accessible"""
+        return Response({
+            'message': 'S3 Presigned URL API is accessible',
+            'debug_mode': settings.DEBUG,
+            's3_configured': hasattr(settings, 'AWS_ACCESS_KEY_ID') and settings.AWS_ACCESS_KEY_ID is not None
+        })
+    
     def post(self, request):
         try:
             file_name = request.data.get('file_name')
             file_type = request.data.get('file_type')
+            
+            print(f"S3 Upload Debug - File: {file_name}, Type: {file_type}")
             
             if not file_name or not file_type:
                 return Response({
                     'error': 'file_name and file_type are required'
                 }, status=400)
             
-            # Check if S3 is configured
+            # Check if S3 is configured (production mode only)
             if settings.DEBUG:
+                print("S3 Upload Debug - Running in DEBUG mode, S3 upload disabled")
                 return Response({
                     'error': 'S3 upload is only available in production',
                     'success': False
                 }, status=400)
             
+            # Check S3 settings
+            if not hasattr(settings, 'AWS_ACCESS_KEY_ID') or not settings.AWS_ACCESS_KEY_ID:
+                print("S3 Upload Debug - AWS_ACCESS_KEY_ID not configured")
+                return Response({
+                    'error': 'AWS credentials not configured',
+                    'success': False
+                }, status=500)
+            
+            if not hasattr(settings, 'AWS_SECRET_ACCESS_KEY') or not settings.AWS_SECRET_ACCESS_KEY:
+                print("S3 Upload Debug - AWS_SECRET_ACCESS_KEY not configured")
+                return Response({
+                    'error': 'AWS credentials not configured',
+                    'success': False
+                }, status=500)
+            
+            if not hasattr(settings, 'AWS_STORAGE_BUCKET_NAME') or not settings.AWS_STORAGE_BUCKET_NAME:
+                print("S3 Upload Debug - AWS_STORAGE_BUCKET_NAME not configured")
+                return Response({
+                    'error': 'AWS bucket not configured',
+                    'success': False
+                }, status=500)
+            
+            if not hasattr(settings, 'AWS_S3_REGION_NAME') or not settings.AWS_S3_REGION_NAME:
+                print("S3 Upload Debug - AWS_S3_REGION_NAME not configured")
+                return Response({
+                    'error': 'AWS region not configured',
+                    'success': False
+                }, status=500)
+            
             # Generate unique filename
             file_extension = os.path.splitext(file_name)[1]
             unique_filename = f"subchapters/videos/{uuid.uuid4()}{file_extension}"
+            
+            print(f"S3 Upload Debug - Generated filename: {unique_filename}")
             
             # Create S3 client
             s3_client = boto3.client(
@@ -1067,6 +1109,8 @@ class S3PresignedURLView(LoginRequiredMixin, APIView):
                 aws_secret_access_key=settings.AWS_SECRET_ACCESS_KEY,
                 region_name=settings.AWS_S3_REGION_NAME
             )
+            
+            print(f"S3 Upload Debug - S3 client created successfully")
             
             # Generate presigned URL for PUT request (upload)
             presigned_url = s3_client.generate_presigned_url(
@@ -1079,6 +1123,8 @@ class S3PresignedURLView(LoginRequiredMixin, APIView):
                 ExpiresIn=3600  # URL expires in 1 hour
             )
             
+            print(f"S3 Upload Debug - Presigned URL generated successfully")
+            
             return Response({
                 'presigned_url': presigned_url,
                 'file_key': unique_filename,
@@ -1086,6 +1132,9 @@ class S3PresignedURLView(LoginRequiredMixin, APIView):
             })
             
         except Exception as e:
+            print(f"S3 Upload Debug - Error: {str(e)}")
+            import traceback
+            traceback.print_exc()
             return Response({
                 'error': str(e),
                 'success': False
