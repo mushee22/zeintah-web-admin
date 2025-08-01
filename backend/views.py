@@ -18,7 +18,11 @@ from django.apps import apps
 from django.core.files.storage import default_storage
 from .tasks import upload_subchapter_video_to_s3
 from PIL import Image
-
+import boto3
+from botocore.exceptions import ClientError
+import uuid
+import os
+from django.conf import settings
 
 
 # Models Import
@@ -646,12 +650,16 @@ class SubChapterCreatView(LoginRequiredMixin, TemplateView):
         context = super().get_context_data(**kwargs)
         context['chapters'] = Chapter.objects.all()
         context['pk'] = self.kwargs.get('pk')
+        # Add S3 settings for frontend
+        if not settings.DEBUG:
+            context['aws_bucket'] = settings.AWS_STORAGE_BUCKET_NAME
+            context['aws_region'] = settings.AWS_S3_REGION_NAME
         return context
 
     def post(self, request, pk):
         try:
             
-            video_file = request.FILES.get("video")
+            video_url = request.POST.get("video_url")  # Get S3 URL instead of file
 
             chapter = Chapter.objects.get(id=pk)
 
@@ -661,7 +669,7 @@ class SubChapterCreatView(LoginRequiredMixin, TemplateView):
                 duration=request.POST.get("duration"),
                 description=request.POST.get("description"),
                 thumbnail=request.FILES.get("thumbnail"),
-                video = video_file,
+                video = video_url,  # Use S3 URL directly
                 chapter=chapter,
                 
             )
@@ -680,6 +688,10 @@ class SubChapterUpdateView(LoginRequiredMixin, DetailView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context['chapters'] = Chapter.objects.all()
+        # Add S3 settings for frontend
+        if not settings.DEBUG:
+            context['aws_bucket'] = settings.AWS_STORAGE_BUCKET_NAME
+            context['aws_region'] = settings.AWS_S3_REGION_NAME
         return context
     
     def post(self, request, pk):
@@ -699,9 +711,9 @@ class SubChapterUpdateView(LoginRequiredMixin, DetailView):
 
             if request.FILES.get("thumbnail"):
                 subChapter.thumbnail = request.FILES.get("thumbnail")
-            if request.FILES.get("video"):
-                 video_file = request.FILES.get("video")
-                 subChapter.video = video_file
+            if request.POST.get("video_url"):  # Check for S3 URL instead of file
+                 video_url = request.POST.get("video_url")
+                 subChapter.video = video_url
 
             subChapter.save()        
 
@@ -1020,5 +1032,107 @@ class MediaUploadTemplateView(LoginRequiredMixin, TemplateView):
     
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context['page_title'] = 'Video Upload'
-        return context 
+        return context
+
+
+class S3PresignedURLView(LoginRequiredMixin, APIView):
+    """
+    API view to generate S3 presigned URLs for direct file uploads
+    """
+    def post(self, request):
+        try:
+            file_name = request.data.get('file_name')
+            file_type = request.data.get('file_type')
+            
+            if not file_name or not file_type:
+                return Response({
+                    'error': 'file_name and file_type are required'
+                }, status=400)
+            
+            # Check if S3 is configured
+            if settings.DEBUG:
+                return Response({
+                    'error': 'S3 upload is only available in production',
+                    'success': False
+                }, status=400)
+            
+            # Generate unique filename
+            file_extension = os.path.splitext(file_name)[1]
+            unique_filename = f"subchapters/videos/{uuid.uuid4()}{file_extension}"
+            
+            # Create S3 client
+            s3_client = boto3.client(
+                's3',
+                aws_access_key_id=settings.AWS_ACCESS_KEY_ID,
+                aws_secret_access_key=settings.AWS_SECRET_ACCESS_KEY,
+                region_name=settings.AWS_S3_REGION_NAME
+            )
+            
+            # Generate presigned URL for PUT request (upload)
+            presigned_url = s3_client.generate_presigned_url(
+                'put_object',
+                Params={
+                    'Bucket': settings.AWS_STORAGE_BUCKET_NAME,
+                    'Key': unique_filename,
+                    'ContentType': file_type
+                },
+                ExpiresIn=3600  # URL expires in 1 hour
+            )
+            
+            return Response({
+                'presigned_url': presigned_url,
+                'file_key': unique_filename,
+                'success': True
+            })
+            
+        except Exception as e:
+            return Response({
+                'error': str(e),
+                'success': False
+            }, status=500)
+
+
+class S3CleanupView(LoginRequiredMixin, APIView):
+    """
+    API view to clean up orphaned S3 files
+    """
+    def post(self, request):
+        try:
+            file_key = request.data.get('file_key')
+            
+            if not file_key:
+                return Response({
+                    'error': 'file_key is required'
+                }, status=400)
+            
+            # Check if S3 is configured
+            if settings.DEBUG:
+                return Response({
+                    'success': True,
+                    'message': 'Cleanup skipped in development mode'
+                })
+            
+            # Create S3 client
+            s3_client = boto3.client(
+                's3',
+                aws_access_key_id=settings.AWS_ACCESS_KEY_ID,
+                aws_secret_access_key=settings.AWS_SECRET_ACCESS_KEY,
+                region_name=settings.AWS_S3_REGION_NAME
+            )
+            
+            # Delete the file from S3
+            s3_client.delete_object(
+                Bucket=settings.AWS_STORAGE_BUCKET_NAME,
+                Key=file_key
+            )
+            
+            return Response({
+                'success': True,
+                'message': 'File deleted successfully'
+            })
+            
+        except Exception as e:
+            return Response({
+                'error': str(e),
+                'success': False
+            }, status=500) 

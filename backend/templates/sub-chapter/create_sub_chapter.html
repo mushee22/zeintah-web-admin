@@ -2,6 +2,16 @@
 {% load static %}
 {% block content %}
 
+<style>
+.progress {
+    height: 20px;
+    margin-bottom: 10px;
+}
+.progress-bar {
+    transition: width 0.3s ease;
+}
+</style>
+
 <div class="content">
 
     {% include 'navbar.html' %}
@@ -10,7 +20,8 @@
         <div class="bread-crumb-container">
             <a href="{% url 'sub_chapter_list' %}"><span class="parent">Sub Chapter</span></a>><span>Create</span>
         </div>
-        <form method="POST" action="{% url 'create_sub_chapter' pk=pk %}" enctype="multipart/form-data" id="CreateFormId">
+        <form method="POST" action="{% url 'create_sub_chapter' pk=pk %}" enctype="multipart/form-data" id="CreateFormId" 
+              data-s3-url-format="{% if aws_bucket and aws_region %}https://{{ aws_bucket }}.s3.{{ aws_region }}.amazonaws.com/{% else %}https://s3.amazonaws.com/{% endif %}">
             {% csrf_token %}
             <div class="mb-3">
                 <div class="form-label required">Image</div>
@@ -28,8 +39,15 @@
             </div>
             <div class="mb-3">
                 <div class="form-label required">Video</div>
-                {% comment %} <label for="video" class="image-box" style="background-image: url(/static/images/video-placeholder.jpg);/"></label> {% endcomment %}
-                <input type="file" id="video" name="video" >
+                <input type="file" id="video" name="video" accept="video/*" style="display: none;">
+                <button type="button" id="video-upload-btn" class="btn btn-outline-primary">Choose Video File</button>
+                <div id="video-upload-status" class="mt-2" style="display: none;">
+                    <div class="progress">
+                        <div class="progress-bar" role="progressbar" style="width: 0%"></div>
+                    </div>
+                    <small class="text-muted" id="upload-status-text">Preparing upload...</small>
+                </div>
+                <input type="hidden" id="video_url" name="video_url">
             </div>
              <div class="mb-3">
                 <label for="order" class="form-label required">Order</label>
@@ -84,7 +102,169 @@
     return element.files[0].size <= param;
   }, "File size is too large");
 
+  // Custom method: validate S3 video URL
+  $.validator.addMethod("requiredVideoUrl", function (value, element) {
+    return value && value.trim() !== '';
+  }, "Please upload a video file");
+
    $(document).ready(function () {
+    
+    // Video upload functionality
+    let uploadedVideoUrl = '';
+    let currentFile = null;
+    let uploadedFileKey = null; // Track the uploaded file key for cleanup
+    
+    // Set S3 URL format
+    const s3UrlFormat = $('#CreateFormId').data('s3-url-format');
+    
+    $('#video-upload-btn').click(function() {
+        $('#video').click();
+    });
+    
+    $('#video').change(function() {
+        const file = this.files[0];
+        if (file) {
+            // Clean up previous upload if exists
+            if (uploadedFileKey) {
+                cleanupS3File(uploadedFileKey);
+                uploadedFileKey = null;
+            }
+            
+            // Reset upload status
+            $('#video-upload-status').hide();
+            $('#video_url').val('');
+            uploadedVideoUrl = '';
+            
+            // Store current file for later upload
+            currentFile = file;
+            
+            // Update button text
+            $('#video-upload-btn').text('Video Selected - Will Upload on Submit').addClass('btn-warning').removeClass('btn-outline-primary btn-success');
+            
+            // Show file info
+            $('#upload-status-text').text(`Selected: ${file.name} (${(file.size / (1024 * 1024)).toFixed(2)} MB)`);
+            $('#video-upload-status').show();
+            $('.progress-bar').css('width', '0%').removeClass('bg-success bg-danger');
+        }
+    });
+    
+    // Clean up uploaded file if user leaves page without submitting
+    $(window).on('beforeunload', function() {
+        if (uploadedFileKey) {
+            cleanupS3File(uploadedFileKey);
+        }
+    });
+    
+    function cleanupS3File(fileKey) {
+        $.ajax({
+            url: '{% url "s3_cleanup" %}',
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': $('[name=csrfmiddlewaretoken]').val(),
+                'Content-Type': 'application/json',
+            },
+            data: JSON.stringify({
+                file_key: fileKey
+            }),
+            success: function(response) {
+                console.log('File cleanup:', response.message);
+            },
+            error: function(xhr, status, error) {
+                console.error('Cleanup failed:', error);
+            }
+        });
+    }
+
+    function uploadVideoToS3(file) {
+        return new Promise((resolve, reject) => {
+            // Show upload status
+            $('#video-upload-status').show();
+            $('#upload-status-text').text('Getting upload URL...');
+            $('.progress-bar').css('width', '10%');
+            
+            // Get presigned URL
+            $.ajax({
+                url: '{% url "s3_presigned_url" %}',
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': $('[name=csrfmiddlewaretoken]').val(),
+                    'Content-Type': 'application/json',
+                },
+                data: JSON.stringify({
+                    file_name: file.name,
+                    file_type: file.type
+                }),
+                success: function(response) {
+                    if (response.success) {
+                        uploadToS3(file, response.presigned_url, response.file_key)
+                            .then(resolve)
+                            .catch(reject);
+                    } else {
+                        const error = 'Error: ' + response.error;
+                        $('#upload-status-text').text(error);
+                        $('.progress-bar').addClass('bg-danger');
+                        reject(new Error(error));
+                    }
+                },
+                error: function(xhr, status, error) {
+                    let errorMessage = 'Error getting upload URL: ' + error;
+                    if (xhr.responseJSON && xhr.responseJSON.error) {
+                        errorMessage = xhr.responseJSON.error;
+                    }
+                    $('#upload-status-text').text(errorMessage);
+                    $('.progress-bar').addClass('bg-danger');
+                    reject(new Error(errorMessage));
+                }
+            });
+        });
+    }
+    
+    function uploadToS3(file, presignedUrl, fileKey) {
+        return new Promise((resolve, reject) => {
+            $('#upload-status-text').text('Uploading to S3...');
+            $('.progress-bar').css('width', '20%');
+            
+            const xhr = new XMLHttpRequest();
+            
+            xhr.upload.addEventListener('progress', function(e) {
+                if (e.lengthComputable) {
+                    const percentComplete = (e.loaded / e.total) * 100;
+                    $('.progress-bar').css('width', percentComplete + '%');
+                    $('#upload-status-text').text('Uploading: ' + Math.round(percentComplete) + '%');
+                }
+            });
+            
+            xhr.addEventListener('load', function() {
+                if (xhr.status === 200) {
+                    // Upload successful
+                    uploadedVideoUrl = s3UrlFormat + fileKey;
+                    uploadedFileKey = fileKey; // Store for potential cleanup
+                    $('#video_url').val(uploadedVideoUrl);
+                    $('#upload-status-text').text('Upload completed successfully!');
+                    $('.progress-bar').removeClass('bg-danger').addClass('bg-success');
+                    $('#video-upload-btn').text('Video Uploaded ✓').addClass('btn-success').removeClass('btn-warning btn-outline-primary');
+                    resolve(uploadedVideoUrl);
+                } else {
+                    const error = 'Upload failed: ' + xhr.statusText;
+                    $('#upload-status-text').text(error);
+                    $('.progress-bar').addClass('bg-danger');
+                    reject(new Error(error));
+                }
+            });
+            
+            xhr.addEventListener('error', function() {
+                const error = 'Upload failed';
+                $('#upload-status-text').text(error);
+                $('.progress-bar').addClass('bg-danger');
+                reject(new Error(error));
+            });
+            
+            xhr.open('PUT', presignedUrl);
+            xhr.setRequestHeader('Content-Type', file.type);
+            xhr.send(file);
+        });
+    }
+
     $("#CreateFormId").validate({
       rules: {
         thumbnail: {
@@ -92,10 +272,8 @@
           imageOnly: true,
           maxFileSize: 3 * 1024 * 1024 // 3MB
         },
-        video: {
-          requiredFile: true,
-          videoOnly: true,
-          maxFileSize: 100 * 1024 * 1024 // 100MB
+        video_url: {
+          requiredVideoUrl: true
         },
         title: {
           required: true
@@ -119,10 +297,8 @@
           imageOnly: "Only images (jpg, jpeg, png, gif) are allowed",
           maxFileSize: "Image must be less than 3MB"
         },
-        video: {
-          requiredFile: "Please upload a video",
-          videoOnly: "Only video files (mp4, webm, ogg, mov) are allowed",
-          maxFileSize: "Video must be less than 100MB"
+        video_url: {
+          requiredVideoUrl: "Please upload a video file"
         },
         title: "Please enter a title",
         description: "Please enter a description",
@@ -138,8 +314,32 @@
         $(element).removeClass("is-invalid");
       },
       submitHandler: function (form) {
-        $("#loading-overlay").show();
-        form.submit();
+        // Check if video is selected but not uploaded yet
+        if (currentFile && !uploadedVideoUrl) {
+          // Upload video first, then submit form
+          $("#loading-overlay").show();
+          $('#upload-status-text').text('Uploading video before form submission...');
+          
+          uploadVideoToS3(currentFile)
+            .then(function(url) {
+              // Upload successful, submit form
+              form.submit();
+            })
+            .catch(function(error) {
+              // Upload failed, hide loading and show error
+              $("#loading-overlay").hide();
+              alert('Video upload failed: ' + error.message);
+              return false;
+            });
+        } else if (!uploadedVideoUrl) {
+          // No video selected
+          alert('Please upload a video file before submitting the form.');
+          return false;
+        } else {
+          // Video already uploaded, submit form
+          $("#loading-overlay").show();
+          form.submit();
+        }
       }
     });
   });
