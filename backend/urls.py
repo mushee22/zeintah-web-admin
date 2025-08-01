@@ -61,6 +61,7 @@ urlpatterns = [
     path('media/', MediaListView.as_view(), name="media_list"),
     path('media/upload/', MediaUploadView.as_view(), name="media_upload"),
     path('media/delete/', MediaDeleteView.as_view(), name="media_delete"),
+    path('media/test/', MediaTestView.as_view(), name="media_test"),
     # S3 Presigned URL API
     path('api/s3-presigned-url/', S3PresignedURLView.as_view(), name="s3_presigned_url"),
 ]
