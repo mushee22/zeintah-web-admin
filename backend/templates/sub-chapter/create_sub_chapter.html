@@ -252,6 +252,12 @@
                     $('.progress-bar').removeClass('bg-danger').addClass('bg-success');
                     $('#video-upload-btn').text('Video Uploaded ✓').addClass('btn-success').removeClass('btn-warning btn-outline-primary');
                     console.log('Upload completed successfully:', uploadedVideoUrl);
+                    
+                    // Hide the upload status after a short delay
+                    setTimeout(function() {
+                        $('#video-upload-status').hide();
+                    }, 2000);
+                    
                     resolve(uploadedVideoUrl);
                 } else {
                     const error = 'Upload failed: ' + xhr.statusText;
@@ -279,8 +285,16 @@
     $('#CreateFormId').on('submit', function(e) {
         e.preventDefault(); // Prevent default form submission
         
+        console.log('Form submit triggered');
+        console.log('Current state:', {
+            currentFile: currentFile,
+            uploadedVideoUrl: uploadedVideoUrl,
+            isFormSubmitting: isFormSubmitting
+        });
+        
         // Validate form first
         if (!$('#CreateFormId').valid()) {
+            console.log('Form validation failed');
             return false;
         }
         
@@ -288,6 +302,7 @@
         
         // Check if video is selected but not uploaded yet
         if (currentFile && !uploadedVideoUrl) {
+            console.log('Starting video upload...');
             // Upload video first, then submit form
             $("#loading-overlay").show();
             $('#upload-status-text').text('Uploading video before form submission...');
@@ -296,8 +311,9 @@
                 .then(function(url) {
                     // Upload successful, submit form
                     console.log('Upload completed, submitting form...');
+                    $("#loading-overlay").hide(); // Hide loading before submit
                     
-                    // Submit form directly
+                    // Submit form directly without delay
                     $('#CreateFormId')[0].submit();
                 })
                 .catch(function(error) {
