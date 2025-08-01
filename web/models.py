@@ -44,6 +44,9 @@ class SubChapters(BasemodelMixin):
     duration = models.IntegerField(null=True,blank=True)
     order = models.IntegerField()
 
+    def __str__(self):
+        return f"{self.title}"
+
 class Features(BasemodelMixin):
     name = models.CharField(max_length=200)
 
@@ -124,7 +127,10 @@ class IdeaLike(BasemodelMixin):
 
 class Media(BasemodelMixin):
     title = models.CharField(max_length=200)
+    url = models.URLField(max_length=500, null=True, blank=True)  # Make nullable for migration
+    media_type = models.CharField(max_length=50, default='video')  # video, audio, image, etc.
+    file_size = models.BigIntegerField(null=True, blank=True)  # File size in bytes
+    duration = models.IntegerField(null=True, blank=True)  # Duration in seconds for videos
     
-
     def __str__(self):
-        return f"{self.title}"
+        return f"{self.title} ({self.media_type})"

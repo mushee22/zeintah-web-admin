@@ -18,6 +18,8 @@ from django.apps import apps
 from django.core.files.storage import default_storage
 from .tasks import upload_subchapter_video_to_s3
 from PIL import Image
+import boto3
+from botocore.exceptions import ClientError
 import uuid
 import os
 from django.conf import settings
@@ -1023,3 +1025,183 @@ class MediaUploadTemplateView(LoginRequiredMixin, TemplateView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         return context 
+
+
+class MediaListView(LoginRequiredMixin, ListView):
+    model = Media
+    template_name = 'media/list_media.html'
+    context_object_name = 'context_data'
+    paginate_by = 10
+
+    def get_queryset(self):
+        return Media.objects.filter(is_active=True).order_by('-created_date')
+
+
+class MediaUploadView(LoginRequiredMixin, TemplateView):
+    template_name = 'media/upload_media.html'
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        # Add S3 settings for frontend
+        if not settings.DEBUG:
+            context['aws_bucket'] = settings.AWS_STORAGE_BUCKET_NAME
+            context['aws_region'] = settings.AWS_S3_REGION_NAME
+        return context
+
+    def post(self, request):
+        try:
+            title = request.POST.get("title")
+            video_url = request.POST.get("video_url")
+            media_type = request.POST.get("media_type", "video")
+            file_size = request.POST.get("file_size")
+            duration = request.POST.get("duration")
+
+            if not title:
+                messages.error(request, "Title is required")
+                return redirect('media_upload')
+
+            if not video_url:
+                messages.error(request, "Video URL is required")
+                return redirect('media_upload')
+
+            media = Media.objects.create(
+                title=title,
+                url=video_url,
+                media_type=media_type,
+                file_size=file_size if file_size else None,
+                duration=duration if duration else None,
+            )
+
+            messages.success(request, "Media uploaded successfully.")
+            return redirect('media_list')
+        except Exception as e:
+            messages.error(request, f"Failed to upload media: {str(e)}")
+            return redirect('media_upload')
+
+
+class MediaDeleteView(LoginRequiredMixin, View):
+    def get(self, request):
+        pk = request.GET.get('pk')
+        
+        if Media.objects.filter(id=pk).exists():
+            media = Media.objects.get(id=pk)
+            try:
+                # Delete from S3 if in production
+                if not settings.DEBUG and hasattr(settings, 'AWS_STORAGE_BUCKET_NAME'):
+                    try:
+                        s3_client = boto3.client(
+                            's3',
+                            aws_access_key_id=settings.AWS_ACCESS_KEY_ID,
+                            aws_secret_access_key=settings.AWS_SECRET_ACCESS_KEY,
+                            region_name=settings.AWS_S3_REGION_NAME
+                        )
+                        
+                        # Extract file key from URL
+                        url_parts = media.url.split('/')
+                        if len(url_parts) > 3:
+                            file_key = '/'.join(url_parts[3:])  # Remove domain parts
+                            s3_client.delete_object(
+                                Bucket=settings.AWS_STORAGE_BUCKET_NAME,
+                                Key=file_key
+                            )
+                    except Exception as e:
+                        print(f"Failed to delete from S3: {str(e)}")
+                
+                media.delete()
+                messages.success(request, "Media deleted successfully")
+            except Exception as e:
+                messages.error(request, f"Failed to delete: {str(e)}")
+        else:
+            messages.error(request, "Media doesn't exist")
+
+        return redirect('media_list')
+
+
+class S3PresignedURLView(LoginRequiredMixin, APIView):
+    """
+    API view to generate S3 presigned URLs for direct file uploads
+    """
+    def get(self, request):
+        """Simple test endpoint to check if API is accessible"""
+        return Response({
+            'message': 'S3 Presigned URL API is accessible',
+            'debug_mode': settings.DEBUG,
+            's3_configured': hasattr(settings, 'AWS_ACCESS_KEY_ID') and settings.AWS_ACCESS_KEY_ID is not None
+        })
+    
+    def post(self, request):
+        try:
+            file_name = request.data.get('file_name')
+            file_type = request.data.get('file_type')
+            
+            if not file_name or not file_type:
+                return Response({
+                    'error': 'file_name and file_type are required'
+                }, status=400)
+            
+            # Check if S3 is configured (production mode only)
+            if settings.DEBUG:
+                return Response({
+                    'error': 'S3 upload is only available in production',
+                    'success': False
+                }, status=400)
+            
+            # Check S3 settings
+            if not hasattr(settings, 'AWS_ACCESS_KEY_ID') or not settings.AWS_ACCESS_KEY_ID:
+                return Response({
+                    'error': 'AWS credentials not configured',
+                    'success': False
+                }, status=500)
+            
+            if not hasattr(settings, 'AWS_SECRET_ACCESS_KEY') or not settings.AWS_SECRET_ACCESS_KEY:
+                return Response({
+                    'error': 'AWS credentials not configured',
+                    'success': False
+                }, status=500)
+            
+            if not hasattr(settings, 'AWS_STORAGE_BUCKET_NAME') or not settings.AWS_STORAGE_BUCKET_NAME:
+                return Response({
+                    'error': 'AWS bucket not configured',
+                    'success': False
+                }, status=500)
+            
+            if not hasattr(settings, 'AWS_S3_REGION_NAME') or not settings.AWS_S3_REGION_NAME:
+                return Response({
+                    'error': 'AWS region not configured',
+                    'success': False
+                }, status=500)
+            
+            # Generate unique filename
+            file_extension = os.path.splitext(file_name)[1]
+            unique_filename = f"media/videos/{uuid.uuid4()}{file_extension}"
+            
+            # Create S3 client
+            s3_client = boto3.client(
+                's3',
+                aws_access_key_id=settings.AWS_ACCESS_KEY_ID,
+                aws_secret_access_key=settings.AWS_SECRET_ACCESS_KEY,
+                region_name=settings.AWS_S3_REGION_NAME
+            )
+            
+            # Generate presigned URL for PUT request (upload)
+            presigned_url = s3_client.generate_presigned_url(
+                'put_object',
+                Params={
+                    'Bucket': settings.AWS_STORAGE_BUCKET_NAME,
+                    'Key': unique_filename,
+                    'ContentType': file_type
+                },
+                ExpiresIn=3600  # URL expires in 1 hour
+            )
+            
+            return Response({
+                'presigned_url': presigned_url,
+                'file_key': unique_filename,
+                'success': True
+            })
+            
+        except Exception as e:
+            return Response({
+                'error': str(e),
+                'success': False
+            }, status=500) 
