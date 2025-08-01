@@ -145,6 +145,7 @@
     let uploadedVideoUrl = $('#video_url').val(); // Get existing video URL if any
     let currentFile = null;
     let uploadedFileKey = null; // Track the uploaded file key for cleanup
+    let isFormSubmitting = false; // Track if form is being submitted
     
     // Set S3 URL format
     const s3UrlFormat = $('#CreateFormId').data('s3-url-format');
@@ -182,7 +183,7 @@
     
     // Clean up uploaded file if user leaves page without submitting
     $(window).on('beforeunload', function() {
-        if (uploadedFileKey) {
+        if (uploadedFileKey && !isFormSubmitting) {
             cleanupS3File(uploadedFileKey);
         }
     });
@@ -306,6 +307,47 @@
         });
     }
 
+    // Handle form submission manually to ensure proper upload handling
+    $('#CreateFormId').on('submit', function(e) {
+        e.preventDefault(); // Prevent default form submission
+        
+        // Validate form first
+        if (!$('#CreateFormId').valid()) {
+            return false;
+        }
+        
+        isFormSubmitting = true; // Set flag to true when form is being submitted
+        
+        // Check if video is selected but not uploaded yet
+        if (currentFile && !uploadedVideoUrl) {
+            // Upload video first, then submit form
+            $("#loading-overlay").show();
+            $('#upload-status-text').text('Uploading video before form submission...');
+            
+            uploadVideoToS3(currentFile)
+                .then(function(url) {
+                    // Upload successful, submit form
+                    console.log('Upload completed, submitting form...');
+                    
+                    // Submit form directly
+                    $('#CreateFormId')[0].submit();
+                })
+                .catch(function(error) {
+                    // Upload failed, hide loading and show error
+                    isFormSubmitting = false; // Reset flag on error
+                    $("#loading-overlay").hide();
+                    console.error('Upload failed:', error);
+                    alert('Video upload failed: ' + error.message);
+                    return false;
+                });
+        } else {
+            // No new video selected or video already uploaded, submit form
+            console.log('Video already uploaded or no new video, submitting form...');
+            $("#loading-overlay").show();
+            $('#CreateFormId')[0].submit();
+        }
+    });
+
     $("#CreateFormId").validate({
       rules: {
         thumbnail: {
@@ -350,35 +392,8 @@
         $(element).removeClass("is-invalid");
       },
       submitHandler: function (form) {
-        // Check if video is selected but not uploaded yet
-        if (currentFile && !uploadedVideoUrl) {
-          // Upload video first, then submit form
-          $("#loading-overlay").show();
-          $('#upload-status-text').text('Uploading video before form submission...');
-          
-          uploadVideoToS3(currentFile)
-            .then(function(url) {
-              // Upload successful, submit form
-              console.log('Upload completed, submitting form...');
-              
-              // Add a small delay to ensure UI updates
-              setTimeout(function() {
-                form.submit();
-              }, 500);
-            })
-            .catch(function(error) {
-              // Upload failed, hide loading and show error
-              $("#loading-overlay").hide();
-              console.error('Upload failed:', error);
-              alert('Video upload failed: ' + error.message);
-              return false;
-            });
-        } else {
-          // No new video selected or video already uploaded, submit form
-          console.log('Video already uploaded or no new video, submitting form...');
-          $("#loading-overlay").show();
-          form.submit();
-        }
+        // This function is now redundant as form submission is handled by the on('submit') listener
+        // Keeping it for now, but it will be removed if not used elsewhere.
       }
     });
   });
