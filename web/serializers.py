@@ -357,32 +357,4 @@ class IdeaCommentSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = IdeaComment
-        fields = '__all__'   
-
-class MediaSerializer(serializers.ModelSerializer):
-    file_url = serializers.SerializerMethodField()
-    file_size = serializers.SerializerMethodField()
-    file_type = serializers.SerializerMethodField()
-    
-    class Meta:
-        model = Media
-        fields = ['id', 'title', 'file', 'file_url', 'file_size', 'file_type', 'created_date', 'modified_date']
-        read_only_fields = ['id', 'created_date', 'modified_date']
-    
-    def get_file_url(self, obj):
-        if obj.file:
-            request = self.context.get('request')
-            if request:
-                return request.build_absolute_uri(obj.file.url)
-            return obj.file.url
-        return None
-    
-    def get_file_size(self, obj):
-        if obj.file and hasattr(obj.file, 'size'):
-            return obj.file.size
-        return None
-    
-    def get_file_type(self, obj):
-        if obj.file:
-            return obj.file.name.split('.')[-1].upper() if '.' in obj.file.name else 'UNKNOWN'
-        return None 
+        fields = '__all__' 
