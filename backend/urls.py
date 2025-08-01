@@ -57,8 +57,4 @@ urlpatterns = [
     path('idea/delete',IdeaDeleteView.as_view(),name="delete_idea"),
     # Media Upload
     path('media/upload/', MediaUploadTemplateView.as_view(), name="media_upload_template"),
-    # S3 Presigned URL API
-    path('api/s3-presigned-url/', S3PresignedURLView.as_view(), name="s3_presigned_url"),
-    # S3 Cleanup API
-    path('api/s3-cleanup/', S3CleanupView.as_view(), name="s3_cleanup"),
 ]

@@ -39,7 +39,7 @@ class SubChapters(BasemodelMixin):
     chapter = models.ForeignKey(Chapter,on_delete=models.CASCADE,related_name="sub_chapter")
     title = models.CharField(max_length=200)
     description = models.TextField(null=True,blank=True)
-    video = models.FileField(upload_to='subchapters/videos', null = True, blank = True)
+    video = models.FileField(upload_to='subchapters/videos', null=True, blank=True)
     thumbnail = models.ImageField(upload_to='chapters/subchapters')
     duration = models.IntegerField(null=True,blank=True)
     order = models.IntegerField()

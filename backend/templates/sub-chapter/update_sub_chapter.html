@@ -2,33 +2,21 @@
 {% load static %}
 {% block content %}
 
-<style>
-.progress {
-    height: 20px;
-    margin-bottom: 10px;
-}
-.progress-bar {
-    transition: width 0.3s ease;
-}
-</style>
-
 <div class="content">
 
     {% include 'navbar.html' %}
 
     <div class="main-container">
         <div class="bread-crumb-container">
-            <a href="{% url 'sub_chapter_list' %}"><span class="parent">Sub Chapter</span></a>><span>Create</span>
+            <a href="{% url 'sub_chapter_list' %}"><span class="parent">Sub Chapter</span></a>><span>Update</span>
         </div>
-        <form method="POST" action="{% url 'update_sub_chapter' pk=context_data.id %}" enctype="multipart/form-data" id="CreateFormId"
-              data-s3-url-format="{% if aws_bucket and aws_region %}https://{{ aws_bucket }}.s3.{{ aws_region }}.amazonaws.com/{% else %}https://s3.amazonaws.com/{% endif %}">
+        <form method="POST" action="{% url 'update_sub_chapter' pk=context_data.id %}" enctype="multipart/form-data" id="CreateFormId">
             {% csrf_token %}
             {% if context_data.thumbnail %}
             <div class="mb-3">
                 <label for="title" class="form-label required">Current Image</label>
                 <td>
-                    <img class="flex-shrink-0" src="{{context_data.thumbnail.url}}" alt=""
-                    style="width: 40px; height: 40px;">
+                    <img src="{{context_data.thumbnail.url}}" alt="Current thumbnail" style="max-width: 200px; max-height: 200px;">
                 </td>
             </div>
             
@@ -36,27 +24,25 @@
             <div></div>
             {% endif %}
             <div class="mb-3">
-                <div class="form-label required">Image</div>
+                <div class="form-label">Image</div>
                 <label for="ImageField" class="image-box" style="background-image: url(/static/images/default-image.jpg);/"></label>
-                <input type="file" id="ImageField" name="thumbnail" style="display: none;">
+                <input type="file" id="ImageField" name="thumbnail" style="opacity: 0; width: 0; height: 0; position: absolute;">
             </div>
             <div class="mb-3">
                 <label for="title" class="form-label required">Title</label>
                 <input type="text" class="form-control" id="title" name="title" value="{{context_data.title}}">
             </div>
-           
             <div class="mb-3">
                 <label for="chapter" class="form-label required">Chapter</label>
-                <select class="form-control" name="chapter" id="chapter">
-                    <option value="">--select a Chapter--</option>
-                    {% for item in chapters %}
-                    <option value="{{item.id}}" {% if context_data.chapter.id == item.id %}selected{% endif %}>{{item.title}}</option>
+                <select class="form-control" id="chapter" name="chapter">
+                    {% for chapter in chapters %}
+                        <option value="{{chapter.id}}" {% if chapter.id == context_data.chapter.id %}selected{% endif %}>{{chapter.title}}</option>
                     {% endfor %}
                 </select>
             </div>
             <div class="mb-3">
                 <label for="description" class="form-label required">Description</label>
-                <textarea  class="form-control" id="description" name="description"rows="4">{{context_data.description}}</textarea>
+                <textarea class="form-control" id="description" name="description" rows="4">{{context_data.description}}</textarea>
             </div>
             {% if context_data.video %}
             <div class="mb-3">
@@ -75,16 +61,7 @@
             {% endif %}
             <div class="mb-3">
                 <div class="form-label">Video</div>
-                <input type="file" id="video" name="video" accept="video/*" style="display: none;">
-                <button type="button" id="video-upload-btn" class="btn btn-outline-primary">Choose New Video File</button>
-                <div id="video-upload-status" class="mt-2" style="display: none;">
-                    <div class="progress">
-                        <div class="progress-bar" role="progressbar" style="width: 0%"></div>
-                    </div>
-                    <small class="text-muted" id="upload-status-text">Preparing upload...</small>
-                </div>
-                <input type="hidden" id="video_url" name="video_url" value="{{context_data.video.url|default:''}}">
-                <small class="text-muted">Leave empty to keep the current video</small>
+                <input type="file" id="video" name="video" accept="video/*">
             </div>
              <div class="mb-3">
                 <label for="order" class="form-label required">Order</label>
@@ -140,235 +117,15 @@
   }, "File size is too large");
 
    $(document).ready(function () {
-    
-    // Video upload functionality
-    let uploadedVideoUrl = $('#video_url').val(); // Get existing video URL if any
-    let currentFile = null;
-    let uploadedFileKey = null; // Track the uploaded file key for cleanup
-    let isFormSubmitting = false; // Track if form is being submitted
-    
-    // Set S3 URL format
-    const s3UrlFormat = $('#CreateFormId').data('s3-url-format');
-    
-    $('#video-upload-btn').click(function() {
-        $('#video').click();
-    });
-    
-    $('#video').change(function() {
-        const file = this.files[0];
-        if (file) {
-            // Clean up previous upload if exists
-            if (uploadedFileKey) {
-                cleanupS3File(uploadedFileKey);
-                uploadedFileKey = null;
-            }
-            
-            // Reset upload status
-            $('#video-upload-status').hide();
-            $('#video_url').val('');
-            uploadedVideoUrl = '';
-            
-            // Store current file for later upload
-            currentFile = file;
-            
-            // Update button text
-            $('#video-upload-btn').text('Video Selected - Will Upload on Submit').addClass('btn-warning').removeClass('btn-outline-primary btn-success');
-            
-            // Show file info
-            $('#upload-status-text').text(`Selected: ${file.name} (${(file.size / (1024 * 1024)).toFixed(2)} MB)`);
-            $('#video-upload-status').show();
-            $('.progress-bar').css('width', '0%').removeClass('bg-success bg-danger');
-        }
-    });
-    
-    // Clean up uploaded file if user leaves page without submitting
-    $(window).on('beforeunload', function() {
-        if (uploadedFileKey && !isFormSubmitting) {
-            cleanupS3File(uploadedFileKey);
-        }
-    });
-    
-    function cleanupS3File(fileKey) {
-        $.ajax({
-            url: '{% url "s3_cleanup" %}',
-            method: 'POST',
-            headers: {
-                'X-CSRFToken': $('[name=csrfmiddlewaretoken]').val(),
-                'Content-Type': 'application/json',
-            },
-            data: JSON.stringify({
-                file_key: fileKey
-            }),
-            success: function(response) {
-                console.log('File cleanup:', response.message);
-            },
-            error: function(xhr, status, error) {
-                console.error('Cleanup failed:', error);
-            }
-        });
-    }
-    
-    function uploadVideoToS3(file) {
-        return new Promise((resolve, reject) => {
-            // Show upload status
-            $('#video-upload-status').show();
-            $('#upload-status-text').text('Getting upload URL...');
-            $('.progress-bar').css('width', '10%');
-            
-            // Get presigned URL
-            $.ajax({
-                url: '{% url "s3_presigned_url" %}',
-                method: 'POST',
-                headers: {
-                    'X-CSRFToken': $('[name=csrfmiddlewaretoken]').val(),
-                    'Content-Type': 'application/json',
-                },
-                data: JSON.stringify({
-                    file_name: file.name,
-                    file_type: file.type
-                }),
-                success: function(response) {
-                    if (response.success) {
-                        uploadToS3(file, response.presigned_url, response.file_key)
-                            .then(resolve)
-                            .catch(reject);
-                    } else {
-                        const error = 'Error: ' + response.error;
-                        $('#upload-status-text').text(error);
-                        $('.progress-bar').addClass('bg-danger');
-                        reject(new Error(error));
-                    }
-                },
-                error: function(xhr, status, error) {
-                    let errorMessage = 'Error getting upload URL: ' + error;
-                    if (xhr.responseJSON && xhr.responseJSON.error) {
-                        errorMessage = xhr.responseJSON.error;
-                    }
-                    console.error('S3 Upload Error Details:', {
-                        status: xhr.status,
-                        statusText: xhr.statusText,
-                        responseText: xhr.responseText,
-                        responseJSON: xhr.responseJSON,
-                        error: error
-                    });
-                    $('#upload-status-text').text(errorMessage);
-                    $('.progress-bar').addClass('bg-danger');
-                    reject(new Error(errorMessage));
-                }
-            });
-        });
-    }
-    
-    function uploadToS3(file, presignedUrl, fileKey) {
-        return new Promise((resolve, reject) => {
-            $('#upload-status-text').text('Uploading to S3...');
-            $('.progress-bar').css('width', '20%');
-            
-            const xhr = new XMLHttpRequest();
-            
-            xhr.upload.addEventListener('progress', function(e) {
-                if (e.lengthComputable) {
-                    const percentComplete = (e.loaded / e.total) * 100;
-                    $('.progress-bar').css('width', percentComplete + '%');
-                    $('#upload-status-text').text('Uploading: ' + Math.round(percentComplete) + '%');
-                }
-            });
-            
-            xhr.addEventListener('load', function() {
-                if (xhr.status === 200) {
-                    // Upload successful
-                    uploadedVideoUrl = s3UrlFormat + fileKey;
-                    uploadedFileKey = fileKey; // Store for potential cleanup
-                    $('#video_url').val(uploadedVideoUrl);
-                    $('#upload-status-text').text('Upload completed successfully!');
-                    $('.progress-bar').removeClass('bg-danger').addClass('bg-success');
-                    $('#video-upload-btn').text('Video Uploaded ✓').addClass('btn-success').removeClass('btn-warning btn-outline-primary');
-                    console.log('Upload completed successfully:', uploadedVideoUrl);
-                    
-                    // Hide the upload status after a short delay
-                    setTimeout(function() {
-                        $('#video-upload-status').hide();
-                    }, 2000);
-                    
-                    resolve(uploadedVideoUrl);
-                } else {
-                    const error = 'Upload failed: ' + xhr.statusText;
-                    $('#upload-status-text').text(error);
-                    $('.progress-bar').addClass('bg-danger');
-                    console.error('Upload failed with status:', xhr.status);
-                    reject(new Error(error));
-                }
-            });
-            
-            xhr.addEventListener('error', function() {
-                const error = 'Upload failed';
-                $('#upload-status-text').text(error);
-                $('.progress-bar').addClass('bg-danger');
-                reject(new Error(error));
-            });
-            
-            xhr.open('PUT', presignedUrl);
-            xhr.setRequestHeader('Content-Type', file.type);
-            xhr.send(file);
-        });
-    }
-
-    // Handle form submission manually to ensure proper upload handling
-    $('#CreateFormId').on('submit', function(e) {
-        e.preventDefault(); // Prevent default form submission
-        
-        console.log('Form submit triggered');
-        console.log('Current state:', {
-            currentFile: currentFile,
-            uploadedVideoUrl: uploadedVideoUrl,
-            isFormSubmitting: isFormSubmitting
-        });
-        
-        // Validate form first
-        if (!$('#CreateFormId').valid()) {
-            console.log('Form validation failed');
-            return false;
-        }
-        
-        isFormSubmitting = true; // Set flag to true when form is being submitted
-        
-        // Check if video is selected but not uploaded yet
-        if (currentFile && !uploadedVideoUrl) {
-            console.log('Starting video upload...');
-            // Upload video first, then submit form
-            $("#loading-overlay").show();
-            $('#upload-status-text').text('Uploading video before form submission...');
-            
-            uploadVideoToS3(currentFile)
-                .then(function(url) {
-                    // Upload successful, submit form
-                    console.log('Upload completed, submitting form...');
-                    $("#loading-overlay").hide(); // Hide loading before submit
-                    
-                    // Submit form directly without delay
-                    $('#CreateFormId')[0].submit();
-                })
-                .catch(function(error) {
-                    // Upload failed, hide loading and show error
-                    isFormSubmitting = false; // Reset flag on error
-                    $("#loading-overlay").hide();
-                    console.error('Upload failed:', error);
-                    alert('Video upload failed: ' + error.message);
-                    return false;
-                });
-        } else {
-            // No new video selected or video already uploaded, submit form
-            console.log('Video already uploaded or no new video, submitting form...');
-            $("#loading-overlay").show();
-            $('#CreateFormId')[0].submit();
-        }
-    });
-
     $("#CreateFormId").validate({
       rules: {
         thumbnail: {
           imageOnly: true,
           maxFileSize: 3 * 1024 * 1024 // 3MB
+        },
+        video: {
+          videoOnly: true,
+          maxFileSize: 100 * 1024 * 1024 // 100MB
         },
         title: {
           required: true
@@ -393,6 +150,10 @@
           imageOnly: "Only images (jpg, jpeg, png, gif) are allowed",
           maxFileSize: "Image must be less than 3MB"
         },
+        video: {
+          videoOnly: "Only video files (mp4, webm, ogg, mov) are allowed",
+          maxFileSize: "Video must be less than 100MB"
+        },
         title: "Please enter a title",
         chapter: "Please select a chapter",
         description: "Please enter a description",
@@ -408,8 +169,8 @@
         $(element).removeClass("is-invalid");
       },
       submitHandler: function (form) {
-        // This function is now redundant as form submission is handled by the on('submit') listener
-        // Keeping it for now, but it will be removed if not used elsewhere.
+        $("#loading-overlay").show();
+        form.submit();
       }
     });
   });
