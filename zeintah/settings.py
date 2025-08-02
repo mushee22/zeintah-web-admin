@@ -229,7 +229,7 @@ if not DEBUG:
 
     # Add these S3 optimizations
     AWS_S3_FILE_OVERWRITE = False
-    AWS_DEFAULT_ACL = 'public-read'
+    # AWS_DEFAULT_ACL = 'public-read'
     AWS_S3_VERIFY = True
     AWS_S3_USE_SSL = True
 
