@@ -1,0 +1,196 @@
+{% extends 'base.html' %}
+{% load static %}
+{% block content %}
+
+<div class="content">
+
+    {% include 'navbar.html' %}
+
+    <div class="main-container">
+        <div class="bread-crumb-container">
+            <a href="{% url 's3_list' %}"><span class="parent">Media</span></a>><span>Upload</span>
+        </div>
+        <form id="CreateFormId" enctype="multipart/form-data">
+            {% csrf_token %}
+            <div class="mb-3">
+                <label for="name" class="form-label required">Name</label>
+                <input type="text" class="form-control" id="name" name="name">
+            </div>
+            <div class="mb-3">
+                <label for="type" class="form-label required">Type</label>
+                <select class="form-control" id="type" name="type">
+                    <!-- <option value="image"> Image</option> -->
+                    <option value="video" selected>Video</option>
+                </select>
+            </div>
+            <div class="mb-3">
+                <label for="url" class="form-label required">File</label>
+                <input type="file" class="form-control" id="file" name="file" accept="video/*">
+            </div>
+            <a href="{% url 'batch_list' %}"><button type="button" class="btn btn-secondary">Cancel</button></a>
+            <button type="submit" class="btn btn-primary">Save</button>
+        </form>
+    </div>
+</div>
+
+<div id="loading-overlay" style="display: none;">
+    <div class="loader-container">
+        <div class="spinner"></div>
+    </div>
+    <p id="upload-progress"></p>
+</div>
+
+
+{% endblock %}
+
+{% block script %}
+<script src="{% static 'js/showSelectedImage.js' %}"></script>
+<script src="{% static 'js/validationMessageGenerator.js' %}"></script>
+<script>
+    $(document).ready(function () {
+        $("#CreateFormId").validate({
+            rules: {
+                name: {
+                    required: true
+                },
+                code: {
+                    required: true
+                },
+            },
+            messages: {
+                name: "Please enter a catgory name",
+                code: "Please enter order",
+            },
+            errorClass: "text-danger",
+            errorElement: "small",
+            highlight: function (element) {
+                $(element).addClass("is-invalid");
+            },
+            unhighlight: function (element) {
+                $(element).removeClass("is-invalid");
+            },
+            submitHandler: function (form) {
+                // form.submit();
+            }
+        });
+
+        $('#CreateFormId').on('submit', function (e) {
+
+            e.preventDefault();
+            var formData = new FormData(this);
+            $("#loading-overlay").show();
+
+            const file = formData.get('file');
+            const fileType = file.type;
+            const fileSize = file.size;
+            const fileExtension = file.name.split('.').pop();
+            const fileSizeMB = fileSize / (1024 * 1024);
+            const fileSizeGB = fileSize / (1024 * 1024 * 1024);
+
+            const name = formData.get('name');
+            const type = formData.get('type');
+
+            $.ajax({
+                url: "{% url 'generate_presigned_url' %}",
+                type: 'POST',
+                data: {
+                    file_name: file.name,
+                    file_type: fileType
+                },
+                headers: {
+                    'X-CSRFToken': '{{ csrf_token }}',
+                    "Content-Type": "application/x-www-form-urlencoded",
+                    // 'Content-Type': 'multipart/form-data'
+                },
+                success: function (response) {
+                    const { url, fields, file_url } = response;
+                    const formData = new FormData();
+                    $.each(fields, function (key, value) {
+                        formData.append(key, value);
+                    });
+                    formData.append('file', file);
+
+                    $.ajax({
+                        url: url,
+                        type: 'POST',
+                        data: formData,
+                        processData: false,
+                        contentType: false,
+                        xhr: function() {
+                            const xhr = new XMLHttpRequest();
+                            xhr.upload.addEventListener('progress', (e) => {
+                                if (e.lengthComputable) {
+                                    const percentComplete = (e.loaded / e.total) * 100;
+                                    $('#upload-progress').text(Math.round(percentComplete) +  '/100' + '%');
+                                }
+                            });
+                            return xhr;
+                        },
+                        success: function (response) {
+                        
+                            $.ajax({
+                                url: "{% url 's3_bucket_object_create' %}",
+                                type: 'POST',
+                                data: {
+                                    file_url: file_url,
+                                    name: name,
+                                    type: type
+                                },
+                                headers: {
+                                    'X-CSRFToken': '{{ csrf_token }}',
+                                    "Content-Type": "application/x-www-form-urlencoded",
+                                },
+                                success: function (response) {
+                                    window.location.href = "{% url 's3_list' %}";
+                                },
+                                error: function (xhr, status, error) {
+                                    console.log(xhr.responseText);
+                                    alert(xhr.responseText);
+                                },
+                                complete: function () {
+                                    $("#loading-overlay").hide();
+                                }
+                            })
+                        },
+                        
+                        error: function (xhr, status, error) {
+                            console.log(xhr.responseText);
+                            alert(xhr.responseText);
+                            $("#loading-overlay").hide();
+                        },
+                        
+                    });
+                },
+                error: function (xhr, status, error) {
+                    console.log(xhr.responseText);
+                    alert(xhr.responseText);
+                    $("#loading-overlay").hide();
+                },
+
+            });
+
+
+            // $.ajax({
+            //     url: $(this).attr('action'),
+            //     type: 'POST',
+            //     data: formData,
+            //     headers: {
+            //         'X-CSRFToken': '{{ csrf_token }}'
+            //     },
+            //     success: function (response) {
+            //         console.log(response);
+            //         window.location.href = "{% url 's3_list' %}";
+            //     },
+            //     error: function (xhr, status, error) {
+            //         console.log(xhr.responseText);
+            //         alert(xhr.responseText);
+            //     },
+            //     complete: function () {
+            //         $("#loading-overlay").hide();
+            //     }
+            // });
+        })
+
+    });
+</script>
+{% endblock %}

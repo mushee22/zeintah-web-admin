@@ -45,6 +45,14 @@
                 <input type="number" value="{{context_data.order}}" class="form-control" id="order" name="order">
             </div>
             <div class="mb-3">
+                <label for="package" class="form-label required">Package</label>
+                <select class="form-control" id="package" name="package">
+                    {% for package in packages %}
+                    <option value="{{package.id}}" {% if package.id == context_data.package.id %}selected{% endif %}>{{package.title}}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="mb-3">
                 <label for="description" class="form-label required">Description</label>
                 <textarea class="form-control" id="description" name="description"
                     rows="4">{{context_data.description}}</textarea>
@@ -92,6 +100,9 @@
         },
         description: {
           required: true
+        },
+        package: {
+          required: true
         }
       },
       messages: {
@@ -103,7 +114,8 @@
           required: "Please enter the order",
           digits: "Order must be a number"
         },
-        description: "Please enter a description"
+        description: "Please enter a description",
+        package: "Please select a package"
       },
       errorClass: "text-danger",
       errorElement: "small",

@@ -120,18 +120,33 @@ class UpdateUserPassword(LoginRequiredMixin, APIView):
 class ChapterListView(LoginRequiredMixin,APIView):
     def get(self, request):
         search = request.GET.get('search')
+        package_id = request.GET.get('package_id')
+        student = Student.objects.get(user=request.user)
+        package = Package.objects.get(id=package_id)
+        if not student.package.filter(id=package_id).exists() and not package.is_public:
+            return Response({
+                "message": "You are not authorized to access this package",
+                "resp_code": 0,
+                "data": {}
+            }, status=status.HTTP_403_FORBIDDEN)
 
         try:
             chapters = Chapter.objects.filter(is_active=True)
             if search:
                 chapters = chapters.filter(title__icontains=search)
+                
+            if package_id:
+                chapters = chapters.filter(package_id=package_id)
+                package = Package.objects.get(id=package_id)
+                package_title = package.title
 
             serializer = ChapterSerializer(chapters, many=True,context={'request': request})
             return Response(
                 {
                     "message": "success",
                     "resp_code": 1,
-                    "data": serializer.data
+                    "data": serializer.data,
+                    "package_title": package_title
                 }
             )
         
@@ -256,10 +271,30 @@ class UpdateStudentProfileImageView(LoginRequiredMixin, APIView):
             "image_url": request.build_absolute_uri(student.profile_image.url)
         }, status=200)
         
-class PackageListView(APIView):
+class PackageListView(LoginRequiredMixin,APIView):
     def get(self, request):
-        packages = Package.objects.all()
+        student = Student.objects.get(user=request.user);
+        packages = Package.objects.all().order_by('-id')
         serializer = PackageSerializer(packages, many=True, context={'request': request})
+        return Response({
+            "message": "success",
+            "resp_code": 1,
+            "data": serializer.data
+        }, status=status.HTTP_200_OK)
+
+
+class BatchListView(LoginRequiredMixin,APIView):
+    def get(self, request):
+        package_id = request.GET.get('package_id')
+        
+        if package_id:
+            # Filter batches by selected package
+            batches = Batch.objects.filter(package_id=package_id)
+        else:
+            # Return all batches if no package is selected
+            batches = Batch.objects.all()
+        
+        serializer = BatchSerializer(batches, many=True, context={'request': request})
         return Response({
             "message": "success",
             "resp_code": 1,
@@ -285,7 +320,7 @@ class IdeaPagination(PageNumberPagination):
 class IdeaListView(LoginRequiredMixin,APIView):
     def get(self, request):
 
-       ideas = Idea.objects.all().order_by('-created_date')
+       ideas = Idea.objects.all().order_by('-id')
 
        if request.GET.get('category_id'):
             category_id = request.GET.get('category_id')
@@ -323,7 +358,6 @@ class IdeaListView(LoginRequiredMixin,APIView):
             "meta": pagination_serilizer.data,
         }, status=status.HTTP_200_OK)   
       
-
 class IdeaCreateView(LoginRequiredMixin, APIView):
     def post(self, request):
         try:
@@ -559,15 +593,26 @@ class TotalProgressView(LoginRequiredMixin, APIView):
         try:
             user = request.user
             student = Student.objects.get(user=user)
-
-            total_subchapters = SubChapters.objects.count()
-            completed_subchapters = SubChapterProgress.objects.filter(
-                student=student, is_completed=True
-            ).count()
-
-            last_watched_sub_chapter = SubChapterProgress.objects.filter(
-                student=student
-            ).order_by('-last_watched_at').first()
+            package_id = request.GET.get('package_id')
+            
+            if package_id:
+                package = Package.objects.get(id=package_id)
+                chapters = Chapter.objects.filter(package=package)
+                total_subchapters = SubChapters.objects.filter(chapter__in=chapters).count()
+                completed_subchapters = SubChapterProgress.objects.filter(
+                    student=student, is_completed=True, sub_chapter__chapter__in=chapters
+                ).count()
+                last_watched_sub_chapter = SubChapterProgress.objects.filter(
+                    student=student, sub_chapter__chapter__in=chapters
+                ).order_by('-last_watched_at').first()
+            else:
+                total_subchapters = SubChapters.objects.count()
+                completed_subchapters = SubChapterProgress.objects.filter(
+                    student=student, is_completed=True
+                ).count()
+                last_watched_sub_chapter = SubChapterProgress.objects.filter(
+                    student=student
+                ).order_by('-last_watched_at').first()
 
             if last_watched_sub_chapter:
                 sub_chapter = SubChapters.objects.get(id=last_watched_sub_chapter.sub_chapter.id)
@@ -589,8 +634,6 @@ class TotalProgressView(LoginRequiredMixin, APIView):
                 "message": "Student profile not found",
                 "resp_code": 0
             }, status=status.HTTP_404_NOT_FOUND)
-
-
 
 class MediaUploadView(APIView):
     """
@@ -666,7 +709,6 @@ class MediaUploadView(APIView):
                 "message": f"Failed to retrieve media files: {str(e)}",
                 "resp_code": 0
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
 
 class MediaDetailView(LoginRequiredMixin, APIView):
     """

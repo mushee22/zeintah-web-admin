@@ -73,3 +73,14 @@ class BackgroundTaskStatus(models.Model):
     def __str__(self):
         return f"{self.model_id} - {self.status}"
 
+
+
+class S3BucketObject(models.Model):
+    title = models.CharField(max_length=200)
+    type = models.CharField(max_length=200,choices=[('image','image'),('video','video')])
+    url = models.URLField(max_length=200)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return self.title

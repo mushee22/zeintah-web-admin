@@ -155,6 +155,7 @@ class ChapterSerializer(serializers.ModelSerializer):
     completed_subchapters = serializers.SerializerMethodField()
     total_duration = serializers.SerializerMethodField()
     subchapters = serializers.SerializerMethodField()
+    package_title = serializers.SerializerMethodField()
 
     class Meta:
         model = Chapter
@@ -169,6 +170,9 @@ class ChapterSerializer(serializers.ModelSerializer):
 
     def get_total_subchapters(self, obj):
         return obj.sub_chapter.count()
+
+    def get_package_title(self, obj):
+        return obj.package.title
 
     def get_completed_subchapters(self, obj):
         request = self.context.get('request')
@@ -278,10 +282,29 @@ class PersonalProfileSerilizer(serializers.ModelSerializer):
 
 class PackageSerializer(serializers.ModelSerializer):
     features = serializers.StringRelatedField(many=True)
+    is_student_purchased = serializers.SerializerMethodField()
+
+    def get_is_student_purchased(self, obj):
+        request = self.context.get('request')
+        if not request or not request.user.is_authenticated:
+            return False
+        student = Student.objects.get(user=request.user)
+        if obj.is_public:
+            return True
+        else:
+            return student.package.filter(id=obj.id).exists()
 
     class Meta:
         model = Package
-        fields = ['id', 'title', 'thumbnail', 'price', 'offer', 'features']
+        fields = ['id', 'title', 'thumbnail', 'price', 'offer', 'features', 'is_student_purchased']
+
+
+class BatchSerializer(serializers.ModelSerializer):
+    package_name = serializers.CharField(source='package.title', read_only=True)
+    
+    class Meta:
+        model = Batch
+        fields = ['id', 'name', 'code', 'package', 'package_name']
 
 
 class CategorySerializer(serializers.ModelSerializer):

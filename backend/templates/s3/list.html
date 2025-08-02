@@ -8,7 +8,7 @@
 
 <div class="main-container">
     <div class="top-container">
-        <form action="{% url 'batch_list' %}" method="GET" id="searchSortForm">
+        <form action="{% url 's3_list' %}" method="GET" id="searchSortForm">
             <!-- search -->
             <input class="form-control border-1" type="search" placeholder="Search" name="search" id="searchBox" value="{{request.GET.search}}">
 
@@ -38,7 +38,7 @@
             {% endcomment %}
 
         </form>
-        <a href="{% url 'create_batch' %}"><button type="submit" class="btn btn-primary">New +</button></a>
+        <a href="{% url 's3_upload' %}"><button type="submit" class="btn btn-primary">New +</button></a>
     </div>
     
     {% include 'messages.html' %}
@@ -48,9 +48,9 @@
             <thead>
                 <tr>
                     <th scope="col">Sl No.</th>
-                    <th scope="col">Name</th>
-                    <th scope="col">Code</th>
-                    <th scope="col">Students</th>
+                    <th scope="col">Title</th>
+                    <th scope="col">URL</th>
+                    <th scope="col">Type</th>
                     <th scope="col">Actions</th>
                 </tr>
             </thead>
@@ -59,23 +59,51 @@
                 <tr>
                     <th scope="row">{{forloop.counter|add:page_obj.start_index|add:"-1"}}</th>
                    
-                    <td>{{item.name}}</td>
-                    <td>{{item.code}}</td>
+                    <td>{{item.title}}</td>
                     <td>
+                        <div style="max-width: 300px; word-break: break-all;">
+                            {{item.url}}
+                        </div>
                         <div class="action-box">
-                            {% if item.id %}
-                                {% with student_count=item.student_set.count %}
-                                    {% if student_count > 0 %}
-                                        <a href="{% url 'list_batch_student' pk=item.id %}" title="View Students">
-                                            <span class="badge bg-primary">{{student_count}}</span>
-                                        </a>
-                                    {% else %}
-                                    <span class="badge bg-primary">{{student_count}}</span>
-                                    {% endif %}
-                                {% endwith %}
-                            {% endif %}
+                            <div class="copy-container">
+                                <svg onclick="copyToClipboard('{{item.url}}', this)" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" style="width: 1em; height: 1em; cursor: pointer; margin-right: 8px;">
+                                    <path d="M502.6 70.63l-61.25-61.25C435.4 3.371 427.2 0 418.7 0H255.1c-35.35 0-64 28.66-64 64l.0195 256C192 355.4 220.7 384 256 384h192c35.2 0 64-28.8 64-64V93.25C512 84.77 508.6 76.63 502.6 70.63zM464 320c0 8.836-7.164 16-16 16H255.1c-8.838 0-16-7.164-16-16L239.1 64.13c0-8.836 7.164-16 16-16h128L384 96c0 17.67 14.33 32 32 32h47.1V320zM272 448c0 8.836-7.164 16-16 16H63.1c-8.838 0-16-7.164-16-16L47.98 192.1c0-8.836 7.164-16 16-16H160V128H63.99c-35.35 0-64 28.65-64 64l.0098 256C.002 483.3 28.66 512 64 512h192c35.2 0 64-28.8 64-64v-32h-47.1L272 448z"/>
+                                </svg>
+                                <span class="copy-text" style="display: none;">Copied!</span>
+                            </div>
+                            <style>
+                                .copy-container {
+                                    position: relative;
+                                    display: inline-block;
+                                }
+                                .copy-text {
+                                    position: absolute;
+                                    left: 50%;
+                                    transform: translateX(-50%);
+                                    background: rgba(0,0,0,0.7);
+                                    color: white;
+                                    padding: 2px 6px;
+                                    border-radius: 3px;
+                                    font-size: 12px;
+                                }
+                            </style>
+                            <script>
+                                function copyToClipboard(text) {
+                                    navigator.clipboard.writeText(text).then(() => {
+                                        // alert('URL copied to clipboard!');
+                                        document.querySelector('.copy-text').style.display = 'block';
+                                        setTimeout(() => {
+                                            document.querySelector('.copy-text').style.display = 'none';
+                                        }, 2000);
+                                    }).catch(err => {
+                                        console.error('Failed to copy text: ', err);
+                                    });
+                                }
+                            </script>
                         </div>
                     </td>
+                    <td>{{item.type}}</td>
+                    
                     <td>
                         <div class="action-box">
                             <a href="{% if item.id %}{% url 'update_batch' pk=item.id %}{% endif %}">
@@ -120,22 +148,22 @@
     document.querySelector(".popup-delete-btn").addEventListener('click',()=>{
         var deleteItem = document.querySelector('input[name="delete_id"]').value;
         const currentPath = window.location.pathname + window.location.search;
-        window.location.href = `{% url 'delete_batch' %}?pk=${deleteItem}&next=${encodeURIComponent(currentPath)}`;
+        window.location.href = `{% url 's3_bucket_object_delete' %}?pk=${deleteItem}&next=${encodeURIComponent(currentPath)}`;
     });
 
 
     // labour status toggler function
-    {% comment %} let togglers = document.querySelectorAll(".status-toggle");
-    togglers.forEach(toggler=>{
-        toggler.addEventListener('change',(e)=>{
-            fetch(`{% url 'archive_case_studies' %}?pk=${e.target.id}`,{
-                'method':'GET'
-            }).then(resp=>resp.json()).then(data=>{
-                if(data.resp_code != 1){
-                    alert("Failed!!")
-                }
-            })
-        });
-    }); {% endcomment %}
+    // {% comment %} let togglers = document.querySelectorAll(".status-toggle");
+    // togglers.forEach(toggler=>{
+    //     toggler.addEventListener('change',(e)=>{
+    //         fetch(`{% url 'archive_case_studies' %}?pk=${e.target.id}`,{
+    //             'method':'GET'
+    //         }).then(resp=>resp.json()).then(data=>{
+    //             if(data.resp_code != 1){
+    //                 alert("Failed!!")
+    //             }
+    //         })
+    //     });
+    // }); {% endcomment %}
 </script>
 {% endblock %}

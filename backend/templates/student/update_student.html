@@ -33,20 +33,20 @@
                 <input type="text" class="form-control" id="phone" name="phone" oninput="this.value = this.value.replace(/[^0-9]/g, '')" value="{{context_data.user.phone}}">
             </div>
             <div class="mb-3">
-                <label for="batch" class="form-label required">Batch</label>
-                <select class="form-control" name="batch" id="batch">
-                    <option value="">--select a Batch--</option>
-                    {% for item in batches %}
-                    <option value="{{item.id}}" {% if context_data.batch.id == item.id %}selected{% endif %}>{{item.name}}</option>
+                <label for="packages" class="form-label required">Course</label>
+                <select class="form-control" name="packages" id="packages">
+                    <option value="">--select a Course--</option>
+                    {% for item in packages %}
+                    <option value="{{item.id}}" {% if item in context_data.package.all %}selected{% endif %}>{{item.title}}</option>
                     {% endfor %}
                 </select>
             </div>
             <div class="mb-3">
-                <label for="batch" class="form-label required">Course</label>
-                <select class="form-control" name="package" id="package">
-                    <option value="">--select a Course--</option>
-                    {% for item in packages %}
-                    <option value="{{item.id}}" {% if context_data.package.id == item.id %}selected{% endif %}>{{item.title}}</option>
+                <label for="batch" class="form-label required">Batch</label>
+                <select class="form-control" name="batches" id="batches" data-all-batches='{% for item in batches %}{{item.id}}:{{item.name}}{% if not forloop.last %},{% endif %}{% endfor %}'>
+                    <option value="">--select a Batch--</option>
+                    {% for item in batches %}
+                    <option value="{{item.id}}" {% if item in context_data.batch.all %}selected{% endif %}>{{item.name}}</option>
                     {% endfor %}
                 </select>
             </div>
@@ -70,7 +70,94 @@
 <script src="{% static 'js/showSelectedImage.js' %}"></script>
 <script src="{% static 'js/validationMessageGenerator.js' %}"></script>
 <script>
-     $(document).ready(function () {
+  $(document).ready(function () {
+    // Store batch selections for each package
+    var batchSelections = {};
+    
+    // Function to load batches based on selected package
+    function loadBatchesByPackage(packageId, preserveSelection) {
+      // Store current selection if preserving
+      var currentSelection = preserveSelection ? $('#batches').val() : null;
+      
+      // Store the current selection for this package
+      if (currentSelection) {
+        batchSelections[packageId] = currentSelection;
+      }
+      
+      if (!packageId) {
+        // If no package selected, show all batches
+        $('#batches').html('<option value="">--select a Batch--</option>');
+        // Parse the data attribute to get all batches
+        var allBatchesData = $('#batches').data('all-batches');
+        if (allBatchesData) {
+          var batches = allBatchesData.split(',');
+          batches.forEach(function(batch) {
+            var parts = batch.split(':');
+            if (parts.length === 2) {
+              var selected = (currentSelection && currentSelection == parts[0]) ? 'selected' : '';
+              $('#batches').append('<option value="' + parts[0] + '" ' + selected + '>' + parts[1] + '</option>');
+            }
+          });
+        }
+        return;
+      }
+
+      // Show loading state
+      $('#batches').html('<option value="">Loading batches...</option>');
+
+      // Make API call to get batches for selected package
+      $.ajax({
+        url: '/web/batches/',
+        method: 'GET',
+        data: { package_id: packageId },
+        success: function(response) {
+          if (response.resp_code === 1) {
+            // Clear and populate batch dropdown
+            $('#batches').html('<option value="">--select a Batch--</option>');
+            
+            if (response.data && response.data.length > 0) {
+              response.data.forEach(function(batch) {
+                // Check if this batch was previously selected for this package
+                var wasSelected = batchSelections[packageId] && batchSelections[packageId] == batch.id;
+                var selected = (currentSelection && currentSelection == batch.id) || wasSelected ? 'selected' : '';
+                $('#batches').append('<option value="' + batch.id + '" ' + selected + '>' + batch.name + '</option>');
+              });
+            } else {
+              $('#batches').append('<option value="">No batches available for this course</option>');
+            }
+          } else {
+            $('#batches').html('<option value="">Error loading batches</option>');
+            console.error('Error:', response.message);
+          }
+        },
+        error: function(xhr, status, error) {
+          $('#batches').html('<option value="">Error loading batches</option>');
+          console.error('AJAX Error:', error);
+        }
+      });
+    }
+
+    // Event listener for package selection
+    $('#packages').on('change', function() {
+      var selectedPackageId = $(this).val();
+      loadBatchesByPackage(selectedPackageId, false); // Don't preserve selection when user changes course
+    });
+
+    // Event listener for batch selection to store the choice
+    $('#batches').on('change', function() {
+      var selectedPackageId = $('#packages').val();
+      var selectedBatchId = $(this).val();
+      if (selectedPackageId && selectedBatchId) {
+        batchSelections[selectedPackageId] = selectedBatchId;
+      }
+    });
+
+    // Filter batches on page load if a course is already selected
+    var selectedPackageId = $('#packages').val();
+    if (selectedPackageId) {
+      loadBatchesByPackage(selectedPackageId, true); // Preserve selection on page load
+    }
+
     // Custom method to check start_date < end_date
     $.validator.addMethod("startBeforeEnd", function(value, element) {
       var startDate = $('#start_date').val();
@@ -90,8 +177,8 @@
         email: { required: true, email: true },
         password: { required: false },
         phone: { required: true, digits: true },
-        batch: { required: true },
-        package: { required: true },
+        batches: { required: true },
+        packages: { required: true },
         start_date: { required: false, startBeforeEnd: true },
         end_date: { required: false }
       },
@@ -101,8 +188,8 @@
         email: "Please enter a valid email",
         password: "Please enter a password",
         phone: "Please enter phone number",
-        batch: "Please select a batch",
-        package: "Please select a course",
+        batches: "Please select a batch",
+        packages: "Please select a course",
         start_date: {
           startBeforeEnd: "Start date must be before end date"
         },
@@ -121,7 +208,5 @@
       }
     });
   });
-
-
 </script>
 {% endblock %}

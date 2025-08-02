@@ -10,7 +10,7 @@
     <div class="bread-crumb-container">
       <a href="{% url 'batch_list' %}"><span class="parent">Batch</span></a>><span>Create</span>
     </div>
-    <form method="POST" action="{% url 'create_batch' %}" id="CreateFormId">
+    <form method="POST" action="{% url 'create_batch_package' pk=package.id %}" id="CreateFormId">
       {% csrf_token %}
       <div class="mb-3">
         <label for="name" class="form-label required">Name</label>
@@ -18,11 +18,7 @@
       </div>
       <div class="mb-3">
         <label for="package" class="form-label required">Package</label>
-        <select class="form-control" id="package" name="package">
-          {% for package in packages %}
-          <option value="{{package.id}}">{{package.title}}</option>
-          {% endfor %}
-        </select>
+        <input type="text" class="form-control" id="package" name="package" value="{{package.title}}" readonly>
       </div>
       <div class="mb-3">
         <label for="code" class="form-label required">Code</label>

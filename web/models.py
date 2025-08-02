@@ -8,6 +8,7 @@ from backend.models import CustomUser
 class Batch(models.Model):
     name = models.CharField(max_length=250,null=True,blank=True)
     code = models.CharField(unique=True,max_length=200)
+    package = models.ForeignKey('Package',on_delete=models.CASCADE,related_name="batch_package",null=True,blank=True)
 
     def __str__(self):
         return f"{self.name} {self.code}"
@@ -17,36 +18,13 @@ class Student(BasemodelMixin):
     group_code = models.CharField(max_length=200,null=True,blank=True)
     profile_image = models.ImageField(null=True,blank=True,upload_to='students')
     student_bio = models.TextField(null=True,blank=True)
-    batch = models.ForeignKey(Batch,on_delete=models.CASCADE)
-    package = models.ForeignKey('Package', on_delete=models.CASCADE, null=True, blank=True)
+    batch = models.ManyToManyField(Batch)
+    package = models.ManyToManyField('Package', blank=True)
     start_date = models.DateField(null=True,blank=True)
     end_date = models.DateField(null=True,blank=True)
 
     # def __str__(self):
     #     return f"{self.user}"
-
-class Chapter(BasemodelMixin):
-    title = models.CharField(max_length=200)
-    thumbnail = models.ImageField(upload_to='chapters')
-    description = models.TextField(null=True,blank=True)
-    duration = models.IntegerField(null=True,blank=True)
-    order = models.IntegerField()
-
-    def __str__(self):
-        return f"{self.title}"
-
-class SubChapters(BasemodelMixin):
-    chapter = models.ForeignKey(Chapter,on_delete=models.CASCADE,related_name="sub_chapter")
-    title = models.CharField(max_length=200)
-    description = models.TextField(null=True,blank=True)
-    video = models.FileField(upload_to='subchapters/videos', null=True, blank=True)
-    thumbnail = models.ImageField(upload_to='chapters/subchapters')
-    duration = models.IntegerField(null=True,blank=True)
-    order = models.IntegerField()
-
-    def __str__(self):
-        return f"{self.title}"
-
 class Features(BasemodelMixin):
     name = models.CharField(max_length=200)
     description = models.TextField(null=True,blank=True)
@@ -62,6 +40,7 @@ class Package(BasemodelMixin):
     price = models.FloatField(default=0)
     offer = models.FloatField(default=0)
     features= models.ManyToManyField(Features,related_name="package_features")
+    is_public = models.BooleanField(default=False)
 
 class Purchase(BasemodelMixin):
     payment_status = [
@@ -72,7 +51,33 @@ class Purchase(BasemodelMixin):
     student = models.ForeignKey(Student,on_delete=models.SET_NULL,null=True,related_name='purchased_student')
     package = models.ForeignKey(Package,on_delete=models.SET_NULL,related_name="purchased_package",null=True)
     payment_id = models.CharField(max_length=200)
-    status = models.CharField(choices=payment_status)
+    status = models.CharField(choices=payment_status)    
+
+class Chapter(BasemodelMixin):
+    title = models.CharField(max_length=200)
+    thumbnail = models.ImageField(upload_to='chapters')
+    description = models.TextField(null=True,blank=True)
+    duration = models.IntegerField(null=True,blank=True)
+    order = models.IntegerField()
+    package = models.ForeignKey(Package,on_delete=models.CASCADE,related_name="chapter_package",null=True,blank=True)
+
+    def __str__(self):
+        return f"{self.title}"
+
+class SubChapters(BasemodelMixin):
+    chapter = models.ForeignKey(Chapter,on_delete=models.CASCADE,related_name="sub_chapter")
+    title = models.CharField(max_length=200)
+    description = models.TextField(null=True,blank=True)
+    video = models.FileField(upload_to='subchapters/videos', null=True, blank=True)
+    thumbnail = models.ImageField(upload_to='chapters/subchapters')
+    duration = models.IntegerField(null=True,blank=True)
+    order = models.IntegerField()
+    video_url = models.URLField(null=True,blank=True)
+
+    def __str__(self):
+        return f"{self.title}"
+
+
 
     # def __str__(self):
     #     return f"{self.course_name.title} {self.get_status_display()}"

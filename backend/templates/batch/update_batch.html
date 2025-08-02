@@ -18,6 +18,14 @@
                 <input type="text" value="{{context_data.name}}" class="form-control" id="name" name="name">
             </div>
             <div class="mb-3">
+                <label for="package" class="form-label required">Package</label>
+                <select class="form-control" id="package" name="package">
+                    {% for package in packages %}
+                    <option value="{{package.id}}" {% if package.id == context_data.package.id %}selected{% endif %}>{{package.title}}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="mb-3">
                 <label for="code" class="form-label required">code</label>
                 <input type="text" value="{{context_data.code}}" class="form-control" id="code" name="code">
             </div>
@@ -42,10 +50,14 @@
         code: {
           required: true
         },
+        package: {
+          required: true
+        }
       },
       messages: {
         name: "Please enter a batch name",
         code: "Please enter a batch code",
+        package: "Please select a package"
       },
       errorClass: "text-danger",
       errorElement: "small",

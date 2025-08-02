@@ -19,12 +19,19 @@ from django.apps import apps
 from django.core.files.storage import default_storage
 from PIL import Image
 
+import boto3
+from django.conf import settings
+from django.views.decorators.http import require_POST
+from django.http import JsonResponse
+from uuid import uuid4
+from urllib.parse import urlparse
+
 # Set up logging
 logger = logging.getLogger(__name__)
 
 # Models Import
 from web.models import *
-from backend.models import Role, BackgroundTaskStatus
+from backend.models import Role, BackgroundTaskStatus, S3BucketObject
 
 
 # Create your views here.
@@ -315,19 +322,26 @@ class StudentCreateView(LoginRequiredMixin, TemplateView):
         return context
 
     def post(self, request):
-        if not request.POST.get("batch") or not request.POST.get("package"):
+        if not request.POST.getlist("batches") or not request.POST.getlist("packages"):
             messages.error(request, "Batch and Package are required.")
             return redirect('create_student')
         
         try:
-            batch = Batch.objects.get(id=request.POST.get("batch"))
-        except Batch.DoesNotExist:
-            messages.error(request, "Batch does not exist.")
+            batches = Batch.objects.filter(id__in=request.POST.getlist("batch"))
+            if not batches:
+                messages.error(request, "Selected batches do not exist.")
+                return redirect('create_student')
+        except Exception:
+            messages.error(request, "Invalid batch selection.")
             return redirect('create_student')
+
         try:
-            package = Package.objects.get(id=request.POST.get("package"))
-        except Package.DoesNotExist:
-            messages.error(request, "Package does not exist.")
+            packages = Package.objects.filter(id__in=request.POST.getlist("package"))
+            if not packages:
+                messages.error(request, "Selected packages do not exist.")
+                return redirect('create_student')
+        except Exception:
+            messages.error(request, "Invalid package selection.")
             return redirect('create_student')
 
         try:
@@ -346,23 +360,25 @@ class StudentCreateView(LoginRequiredMixin, TemplateView):
             # Handle profile image properly
             profile_image = request.FILES.get("profile_image")
 
-            Student.objects.create(
+            student = Student.objects.create(
                 user=user,
                 profile_image=profile_image,
-                batch=batch,
-                package=package,
                 start_date=request.POST.get("start_date"),
                 end_date=request.POST.get("end_date"),
                 student_bio=request.POST.get("student_bio")
             )
 
+            # Add many-to-many relationships
+            student.batch.set(batches)
+            student.package.set(packages)
+
             messages.success(request, "Student created successfully.")
-            return redirect('list_batch_student', pk=batch.id)
+            return redirect('student_list')
 
         except Exception as e:
             messages.error(request, f"Failed to create student: {str(e)}")
-            return redirect('list_batch_student', pk=batch.id)
-       
+            return redirect('student_list')
+
 class StudentUpdateView(LoginRequiredMixin, DetailView):
     template_name = 'student/update_student.html'
     model = Student
@@ -370,11 +386,6 @@ class StudentUpdateView(LoginRequiredMixin, DetailView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        # student_id = self.kwargs.get('pk')  # Assuming URL is like path('student/update/<int:pk>/')
-        # student = get_object_or_404(Student, pk=student_id)
-
-        # context['student'] = student
-        # context['user'] = student.user
         context['batches'] = Batch.objects.all()
         context['packages'] = Package.objects.all()
         return context
@@ -384,25 +395,29 @@ class StudentUpdateView(LoginRequiredMixin, DetailView):
         user = student.user
 
         try:
-            batch = Batch.objects.get(id=request.POST.get("batch"))
-        except Batch.DoesNotExist:
-            messages.error(request, "Batch does not exist.")
-            return redirect('student_list')
-        
-        try:
-            package = Package.objects.get(id=request.POST.get("package"))
-        except Package.DoesNotExist:
-            messages.error(request, "Course does not exist.")
-            return redirect('student_list')
+            # Get selected batches and packages
+            batch_ids = request.POST.getlist("batches")
+            package_ids = request.POST.getlist("packages")
 
-        try:
+            # Validate batches exist
+            batches = Batch.objects.filter(id__in=batch_ids)
+            if len(batches) != len(batch_ids):
+                messages.error(request, "One or more selected batches do not exist.")
+                return redirect('student_list')
+
+            # Validate packages exist  
+            packages = Package.objects.filter(id__in=package_ids)
+            if len(packages) != len(package_ids):
+                messages.error(request, "One or more selected courses do not exist.")
+                return redirect('student_list')
+
             # Update user details
             user.first_name = request.POST.get("first_name")
-            user.last_name = request.POST.get("last_name")
+            user.last_name = request.POST.get("last_name") 
             user.email = request.POST.get("email")
             user.username = request.POST.get("email")
             user.phone = request.POST.get("phone")
-            user.is_admin = False  # Ensure the user is not an admin
+            user.is_admin = False
 
             # Only update password if provided
             new_password = request.POST.get("password")
@@ -412,8 +427,9 @@ class StudentUpdateView(LoginRequiredMixin, DetailView):
             user.save()
 
             # Update student details
-            student.batch = batch
-            student.package = package
+            student.batch.set(batches)
+            student.package.set(packages)
+            
             start_date = request.POST.get("start_date")
             end_date = request.POST.get("end_date")
             if start_date:
@@ -424,13 +440,16 @@ class StudentUpdateView(LoginRequiredMixin, DetailView):
             student.save()
 
             messages.success(request, "Student details updated successfully.")
-            # return redirect('student_list')
-            return redirect('list_batch_student', pk=batch.id)
+            # Redirect to first batch's student list if any batches selected
+            if batches:
+                return redirect('student_list')
+            return redirect('student_list')
 
         except Exception as e:
             messages.error(request, f"Failed to update student: {str(e)}")
-            # return redirect('student_list')
-            return redirect('list_batch_student', pk=batch.id)
+            if batches:
+                return redirect('student_list')
+            return redirect('student_list')
         
 class StudentDeleteView(LoginRequiredMixin,DeleteMasterView):
     model = Student
@@ -484,7 +503,23 @@ class ChapterSubChapterView(LoginRequiredMixin, ListView):
 class ChapterCreateView(LoginRequiredMixin, TemplateView):
     template_name = 'chapter/create_chapter.html'
 
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['packages'] = Package.objects.all()
+        return context
+
     def post(self, request):
+        package_id = request.POST.get("package")
+
+        if not package_id:
+            messages.error(request, "Package is required.")
+            return redirect('create_chapter')
+
+        try:
+            package = Package.objects.get(id=package_id)
+        except Package.DoesNotExist:
+            messages.error(request, "Package does not exist.")
+            return redirect('create_chapter')
 
         try:
             Chapter.objects.create(
@@ -492,6 +527,7 @@ class ChapterCreateView(LoginRequiredMixin, TemplateView):
                 thumbnail=request.FILES.get("thumbnail"),
                 description=request.POST.get("description"),
                 order=request.POST.get("order"),
+                package=package
             )
             messages.success(request, "Chapter created successfully.")
             return redirect('chapter_list')
@@ -505,33 +541,100 @@ class ChapterUpdateView(LoginRequiredMixin, DetailView):
     model = Chapter
     context_object_name ='context_data'
 
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['packages'] = Package.objects.all()
+        return context
+
 
     def post(self, request, pk):
         chapter = get_object_or_404(Chapter, pk=pk)
+        package_id = request.POST.get("package")
+        if not package_id:
+            messages.error(request, "Package is required.")
+            return redirect('update_chapter', pk=pk)
+        try:
+            package = Package.objects.get(id=package_id)
+        except Package.DoesNotExist:    
+            messages.error(request, "Package does not exist.")
+            return redirect('update_chapter', pk=pk)
 
         try:
             # Update user details
             chapter.title=request.POST.get("title")
             chapter.description=request.POST.get("description")
             chapter.order=request.POST.get("order")
-
+            chapter.package=package
             # Update thumbnail if a new one is uploaded
             if request.FILES.get("thumbnail"):
                 chapter.thumbnail = request.FILES.get("thumbnail")
 
             chapter.save()
 
-            messages.success(request, "Student details updated successfully.")
-            return redirect('chapter_list')
+            messages.success(request, "Chapter details updated successfully.")
+            return redirect('list_chapter_package', pk=package.id)
 
         except Exception as e:
-            messages.error(request, f"Failed to update student: {str(e)}")
-            return redirect('chapter_list')
+            messages.error(request, f"Failed to update chapter: {str(e)}")
+            return redirect('list_chapter_package', pk=package.id)
         
 class ChapterDeleteView(LoginRequiredMixin,DeleteMasterView):
     model = Chapter
-    return_path = 'chapter_list'
+    return_path = 'list_chapter_package'
+    
+    def get(self, request):
+        next_url = request.GET.get('next')
+        pk = request.GET.get('pk')
+        
+        if self.model.objects.filter(id=pk).exists():
+            queryset = self.model.objects.get(id=pk)
+            queryset.delete()
+            messages.success(request, "Deleted successfully")
+            if next_url:
+                return redirect(next_url)
+            else:
+                return redirect('chapter_list')
+        else:
+            return redirect('chapter_list')
 
+class ChapterPackageView(LoginRequiredMixin, ListView):
+    model = Chapter
+    template_name = 'chapter/list_package_wise_chapter.html'
+    context_object_name = 'context_data'
+    paginate_by = 10
+
+    def get_queryset(self, **kwargs):
+       package_id = self.kwargs['pk']
+       return Chapter.objects.filter(package_id=package_id)
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['package'] = Package.objects.get(pk=self.kwargs['pk'])
+        return context
+
+class ChapterPackageCreateView(LoginRequiredMixin, TemplateView):
+    template_name = 'chapter/create_package_wise_chapter.html'
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['package'] = Package.objects.get(pk=self.kwargs['pk'])
+        return context
+
+    def post(self, request, pk):
+        try:
+            Chapter.objects.create(
+                title=request.POST.get("title"),
+                thumbnail=request.FILES.get("thumbnail"),
+                description=request.POST.get("description"),
+                order=request.POST.get("order"),
+                package_id=pk
+            )
+            messages.success(request, "Chapter created successfully.")
+            return redirect('list_chapter_package', pk=pk)
+        except Exception as e:
+            messages.error(request, f"Failed to create chapter: {str(e)}")
+    
+    
 #*********************************************************************************
 
 class BatchListView(LoginRequiredMixin,ListView):
@@ -567,7 +670,7 @@ class BatchStudentListView(LoginRequiredMixin, ListView):
 
     def get_queryset(self):
         batch_id = self.kwargs['pk']
-        return Student.objects.filter(batch_id=batch_id)
+        return Student.objects.filter(batch__id=batch_id)
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -578,11 +681,26 @@ class BatchCreateView(LoginRequiredMixin, TemplateView):
 
     template_name = 'batch/create_batch.html'
 
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['packages'] = Package.objects.all()
+        return context
+
     def post(self, request):
+        package_id = request.POST.get("package")
+        if not package_id:
+            messages.error(request, "Package is required.")
+            return redirect('create_batch')
+        try:
+            package = Package.objects.get(id=package_id)
+        except Package.DoesNotExist:
+            messages.error(request, "Package does not exist.")
+            return redirect('create_batch')
         try:
             Batch.objects.create(
                 name=request.POST.get("name"),
                 code=request.POST.get("code"),
+                package=package
             )
             messages.success(request, "Batch created successfully.")
             return redirect('batch_list')
@@ -595,16 +713,32 @@ class BatchUpdateView(LoginRequiredMixin, DetailView):
     model = Batch
     context_object_name ='context_data'
 
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['packages'] = Package.objects.all()
+        return context
+
     def post(self, request, pk):
         batch = get_object_or_404(Batch, pk=pk)
+        package_id = request.POST.get("package")
+        if not package_id:
+            messages.error(request, "Package is required.")
+            return redirect('update_batch', pk=pk)
+        try:
+            package = Package.objects.get(id=package_id)
+        except Package.DoesNotExist:
+            messages.error(request, "Package does not exist.")
+            return redirect('update_batch', pk=pk)
+        
         try:
             batch.name = request.POST.get('name')
             batch.code = request.POST.get('code')
+            batch.package = package
             batch.save()
-            return redirect('batch_list')
+            return redirect('list_batch_package', pk=package.id)
         except Exception as e:
             messages.error(request, f"Failed to update student: {str(e)}")   
-            return redirect('batch_list') 
+            return redirect('list_batch_package', pk=package.id) 
 
 class BacthDeleteView(LoginRequiredMixin,DeleteMasterView):
     model = Batch
@@ -612,15 +746,51 @@ class BacthDeleteView(LoginRequiredMixin,DeleteMasterView):
 
     def get(self, request):
         pk = request.GET.get('pk')
-        batch_id = request.GET.get('batch_id')
+        next_url = request.GET.get('next')
         if self.model.objects.filter(id=pk).exists():
             queryset = self.model.objects.get(id=pk)
             queryset.delete()
             messages.success(request, "Deleted successfully")
-            if batch_id:
-                return redirect('list_batch_student', pk=batch_id)
+            if next_url:
+                return redirect(next_url)
             else:
                 return redirect('batch_list')
+
+class BatchPackageView(LoginRequiredMixin, ListView):
+    model = Batch
+    template_name = 'batch/list_package_wise_batch.html'
+    context_object_name = 'context_data'
+    paginate_by = 10
+
+    def get_queryset(self, **kwargs):
+        package_id = self.kwargs['pk']
+        return Batch.objects.filter(package_id=package_id)
+    
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['package'] = Package.objects.get(pk=self.kwargs['pk'])
+        return context
+
+class BatchPackageCreateView(LoginRequiredMixin, TemplateView):
+    template_name = 'batch/create_package_wise_batch.html'
+    
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['package'] = Package.objects.get(pk=self.kwargs['pk'])
+        return context
+
+    def post(self, request, pk):
+        try:
+            Batch.objects.create(
+                name=request.POST.get("name"),
+                code=request.POST.get("code"),
+                package_id=pk
+            )
+            messages.success(request, "Batch created successfully.")
+            return redirect('list_batch_package', pk=pk)
+        except Exception as e:
+            messages.error(request, f"Failed to create batch: {str(e)}")
+            return redirect('list_batch_package', pk=pk)
 
 #*************************************************************************
 class SubChapterListView(LoginRequiredMixin, ListView):
@@ -646,13 +816,15 @@ class SubChapterCreatView(LoginRequiredMixin, TemplateView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context['chapters'] = Chapter.objects.all()
+        context['s3_bucket_objects'] = S3BucketObject.objects.all()
         context['pk'] = self.kwargs.get('pk')
         return context
 
     def post(self, request, pk):
         try:
             
-            video_file = request.FILES.get("video")
+            # video_file = request.FILES.get("video")
+
 
             chapter = Chapter.objects.get(id=pk)
 
@@ -662,7 +834,7 @@ class SubChapterCreatView(LoginRequiredMixin, TemplateView):
                 duration=request.POST.get("duration"),
                 description=request.POST.get("description"),
                 thumbnail=request.FILES.get("thumbnail"),
-                video = video_file,
+                video_url=request.POST.get("video_url"),
                 chapter=chapter,
                 
             )
@@ -681,6 +853,7 @@ class SubChapterUpdateView(LoginRequiredMixin, DetailView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context['chapters'] = Chapter.objects.all()
+        context['s3_bucket_objects'] = S3BucketObject.objects.all()
         return context
     
     def post(self, request, pk):
@@ -690,6 +863,7 @@ class SubChapterUpdateView(LoginRequiredMixin, DetailView):
             messages.error(request, "Chapter does not exist.")
             return redirect('sub_chapter_list')
 
+
         try:
             subChapter = get_object_or_404(SubChapters, pk=pk)
             subChapter.title = request.POST.get("title")
@@ -697,12 +871,13 @@ class SubChapterUpdateView(LoginRequiredMixin, DetailView):
             subChapter.order=request.POST.get("order")
             subChapter.duration=request.POST.get("duration")
             subChapter.chapter = chapter
+            subChapter.video_url = request.POST.get("video_url")
 
             if request.FILES.get("thumbnail"):
                 subChapter.thumbnail = request.FILES.get("thumbnail")
-            if request.FILES.get("video"):
-                 video_file = request.FILES.get("video")
-                 subChapter.video = video_file
+            # if request.FILES.get("video"):
+            #      video_file = request.FILES.get("video")
+            #      subChapter.video = video_file
 
             subChapter.save()        
 
@@ -774,7 +949,7 @@ class PackageStudentListView(LoginRequiredMixin, ListView):
 
     def get_queryset(self):
         package_id = self.kwargs['pk']
-        return Student.objects.filter(package_id=package_id)
+        return Student.objects.filter(package__id=package_id)
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -786,9 +961,16 @@ class PackageCreateView(LoginRequiredMixin, TemplateView):
 
     def post(self, request):
         try:
+            is_public = request.POST.get("is_public")
+            if is_public == "on":
+                is_public = True
+            else:
+                is_public = False
+
             package = Package.objects.create(
                 title=request.POST.get("title"),
                 thumbnail=request.FILES.get("thumbnail"),
+                is_public=is_public
             )
             messages.success(request, "Package created successfully.")
             return redirect('package_list')
@@ -807,7 +989,13 @@ class PackageUpdateView(LoginRequiredMixin, DetailView):
 
         try:
             package.title = request.POST.get("title")
+            is_public = request.POST.get("is_public")
+            if is_public == "on":
+                is_public = True
+            else:
+                is_public = False
 
+            package.is_public = is_public
             if request.FILES.get("thumbnail"):
                 package.thumbnail = request.FILES.get("thumbnail")
 
@@ -912,9 +1100,10 @@ class IdeaListView(LoginRequiredMixin, ListView):
     template_name= "idea/list_idea.html"
     context_object_name = "context_data"
     paginate_by = 10
+    ordering = ['-created_date']
 
     def get_queryset(self):
-        queryset =  super().get_queryset()
+        queryset = super().get_queryset()
         search = self.request.GET.get("search")
         sort = self.request.GET.get("sort")   
 
@@ -922,12 +1111,15 @@ class IdeaListView(LoginRequiredMixin, ListView):
             queryset = queryset.filter(
                 Q(title__istartswith = search)
             )
+            
+        # Apply sorting based on sort parameter
         if sort == "oldest":
-            queryset = queryset.order_by('id')
+            queryset = queryset.order_by('created_date')
         else:
-            queryset = queryset.order_by('-id')
+            # Default to newest first
+            queryset = queryset.order_by('-created_date')
 
-        return queryset    
+        return queryset
 
 class IdeaCreateView(LoginRequiredMixin, TemplateView):
     template_name = "idea/create_idea.html"
@@ -1021,4 +1213,145 @@ class MediaUploadTemplateView(LoginRequiredMixin, TemplateView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        return context 
+        context['tasks'] = BackgroundTaskStatus.objects.all().order_by('-created_at')
+        return context
+
+
+class GetBatchesByPackageView(LoginRequiredMixin, APIView):
+    """
+    API view to get batches filtered by package ID
+    """
+    def get(self, request):
+        package_id = request.GET.get('package_id')
+        
+        if not package_id:
+            return JsonResponse({
+                'success': False,
+                'message': 'Package ID is required',
+                'data': []
+            })
+        
+        try:
+            batches = Batch.objects.filter(package_id=package_id)
+            batch_data = [{'id': batch.id, 'name': batch.name, 'code': batch.code} for batch in batches]
+            
+            return JsonResponse({
+                'success': True,
+                'message': 'Batches retrieved successfully',
+                'data': batch_data
+            })
+        except Exception as e:
+            return JsonResponse({
+                'success': False,
+                'message': f'Error retrieving batches: {str(e)}',
+                'data': []
+            }) 
+
+class S3BucketObjectCreateView(LoginRequiredMixin, TemplateView):
+    template_name = 's3/upload.html'
+
+@require_POST
+def s3_bucket_object_create(request):
+    try:
+        S3BucketObject.objects.create(
+            title=request.POST.get('name'),
+            url=request.POST.get('file_url'),
+            type=request.POST.get('type')
+        )
+        return JsonResponse({
+            'success': True,
+            'message': 'S3 bucket object created successfully',
+            'data': []
+        })
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'message': f'Error creating S3 bucket object: {str(e)}',
+            'data': []
+        })
+
+
+class S3BucketObjectListView(LoginRequiredMixin, ListView):
+    model = S3BucketObject
+    template_name = 's3/list.html'
+    context_object_name = 'context_data'
+    paginate_by = 10
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        return queryset.order_by('-created_at')
+    
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        return context
+
+class S3BucketObjectDeleteView(LoginRequiredMixin, DeleteMasterView):
+    model = S3BucketObject
+    return_path = 's3_list'
+
+    def get(self, request):
+       pk = request.GET.get('pk')
+       s3_bucket_object = get_object_or_404(S3BucketObject, pk=pk)
+
+       if not s3_bucket_object:
+           messages.error(request, "S3 bucket object not found.")
+           return redirect('s3_list')
+
+       bucket_name = settings.AWS_STORAGE_BUCKET_NAME
+       parsed_url = urlparse(s3_bucket_object.url)
+       object_key = parsed_url.path.lstrip('/')
+
+       print(f'object_key ${object_key}')
+
+       s3 = boto3.client(
+           's3',
+           aws_access_key_id=settings.AWS_ACCESS_KEY_ID,
+           aws_secret_access_key=settings.AWS_SECRET_ACCESS_KEY,
+           region_name=settings.AWS_S3_REGION_NAME,
+       )
+
+       try:
+           s3.delete_object(Bucket=bucket_name, Key=object_key)
+           print(f'object_key ${object_key}')
+           s3_bucket_object.delete()
+           messages.success(request, "S3 bucket object deleted successfully.")
+       except Exception as e:
+           messages.error(request, f"Failed to delete S3 bucket object: {str(e)}")
+           return redirect('s3_list')
+
+       return redirect('s3_list')
+        
+
+@require_POST
+def generate_presigned_url(request):
+
+    try:
+
+        s3 = boto3.client(
+            's3',
+            aws_access_key_id=settings.AWS_ACCESS_KEY_ID,
+            aws_secret_access_key=settings.AWS_SECRET_ACCESS_KEY,
+            region_name=settings.AWS_S3_REGION_NAME,
+        )
+
+        file_name = request.POST.get('file_name')
+        file_type = request.POST.get('file_type')
+        key = f"uploads/{uuid4()}_{file_name}"
+
+        presigned_post = s3.generate_presigned_post(
+            Bucket=settings.AWS_STORAGE_BUCKET_NAME,
+            Key=key,
+            Fields={"Content-Type": file_type},
+            Conditions=[{"Content-Type": file_type}],
+            ExpiresIn=3600,
+        )
+
+        return JsonResponse({
+            "url": presigned_post["url"],
+            "fields": presigned_post["fields"],
+            "file_url": f"https://{settings.AWS_STORAGE_BUCKET_NAME}.s3.amazonaws.com/{key}",
+        }) 
+    except Exception as e:
+        return JsonResponse({
+            "error": str(e)
+        }, status=500)           

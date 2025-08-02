@@ -10,7 +10,7 @@
         <div class="bread-crumb-container">
             <a href="{% url 'student_list' %}"><span class="parent">Student</span></a>><span>Create</span>
         </div>
-        <form method="POST" action="{% url 'create_chapter' %}" enctype="multipart/form-data" id="CreateFormId">
+        <form method="POST" action="{% url 'create_chapter_package' pk=package.id %}" enctype="multipart/form-data" id="CreateFormId">
             {% csrf_token %}
             <div class="mb-3">
                 <div class="form-label required">Image</div>
@@ -33,11 +33,7 @@
             </div>
             <div class="mb-3">
                 <label for="package" class="form-label required">Package</label>
-                <select class="form-control" id="package" name="package">
-                    {% for package in packages %}
-                    <option value="{{package.id}}">{{package.title}}</option>
-                    {% endfor %}
-                </select>
+                <input type="text" class="form-control" id="package" name="package" value="{{package.title}}" readonly>
             </div>
             <div class="mb-3">
                 <label for="description" class="form-label required">Description</label>
@@ -89,9 +85,6 @@
         },
         description: {
           required: true
-        },
-        package: {
-          required: true
         }
       },
       messages: {
@@ -103,8 +96,7 @@
           required: "Please enter the order",
           digits: "Order must be a number"
         },
-        description: "Please enter a description",
-        package: "Please select a package"
+        description: "Please enter a description"
       },
       errorClass: "text-danger",
       errorElement: "small",

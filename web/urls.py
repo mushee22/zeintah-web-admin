@@ -25,6 +25,7 @@ urlpatterns = [
     path('total/progress/', TotalProgressView.as_view(), name='total-progress'),
     # Packages
     path('packages/', PackageListView.as_view(), name='package-list'),
+    path('batches/', BatchListView.as_view(), name='batch-list'),
     #Categories
     path('categories/', CategoryListView.as_view(), name="category-list"),
     #Ideas
