@@ -283,7 +283,7 @@ class PackageListView(LoginRequiredMixin,APIView):
         }, status=status.HTTP_200_OK)
 
 
-class BatchListView(LoginRequiredMixin,APIView):
+class BatchListView(APIView):
     def get(self, request):
         package_id = request.GET.get('package_id')
         
