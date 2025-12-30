@@ -1,4 +1,5 @@
 from django.shortcuts import render
+from rest_framework.permissions import AllowAny
 from rest_framework_simplejwt.views import TokenObtainPairView
 from .serializers import CustomTokenObtainPairSerializer
 from rest_framework.views import APIView
@@ -271,9 +272,9 @@ class UpdateStudentProfileImageView(LoginRequiredMixin, APIView):
             "image_url": request.build_absolute_uri(student.profile_image.url)
         }, status=200)
         
-class PackageListView(LoginRequiredMixin,APIView):
+class PackageListView(APIView):
+    permission_classes = [AllowAny]
     def get(self, request):
-        student = Student.objects.get(user=request.user);
         packages = Package.objects.all().order_by('-id')
         serializer = PackageSerializer(packages, many=True, context={'request': request})
         return Response({
@@ -317,9 +318,9 @@ class IdeaPagination(PageNumberPagination):
     page_size_query_param = 'page_size'
     max_page_size = 100
 
-class IdeaListView(LoginRequiredMixin,APIView):
+class IdeaListView(APIView):
+    permission_classes = [AllowAny]
     def get(self, request):
-
        ideas = Idea.objects.all().order_by('-id')
 
        if request.GET.get('category_id'):
