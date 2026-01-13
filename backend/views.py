@@ -162,10 +162,12 @@ class CreateAdminView(LoginRequiredMixin, TemplateView):
                 is_admin=True,  # Set the user as admin
             )
 
+            user.set_password(request.POST.get("password"))  # Hash the password
+            user.save() 
+
             Student.objects.create(user = user) 
 
-            user.set_password(request.POST.get("password"))  # Hash the password
-            user.save()
+            
             messages.success(request, "Admin user created successfully.")
             return redirect('admin_user_list')
         except Exception as e:
