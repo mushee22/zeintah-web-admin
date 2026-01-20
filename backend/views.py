@@ -329,7 +329,7 @@ class StudentCreateView(LoginRequiredMixin, TemplateView):
             return redirect('create_student')
         
         try:
-            batches = Batch.objects.filter(id__in=request.POST.getlist("batch"))
+            batches = Batch.objects.filter(id__in=request.POST.getlist("batches"))
             if not batches:
                 messages.error(request, "Selected batches do not exist.")
                 return redirect('create_student')
@@ -338,7 +338,7 @@ class StudentCreateView(LoginRequiredMixin, TemplateView):
             return redirect('create_student')
 
         try:
-            packages = Package.objects.filter(id__in=request.POST.getlist("package"))
+            packages = Package.objects.filter(id__in=request.POST.getlist("packages"))
             if not packages:
                 messages.error(request, "Selected packages do not exist.")
                 return redirect('create_student')

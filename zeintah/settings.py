@@ -122,6 +122,13 @@ CORS_ALLOW_HEADERS = (
 WSGI_APPLICATION = "zeintah.wsgi.application"
 
 REST_FRAMEWORK = {
+    'DEFAULT_AUTHENTICATION_CLASSES': [
+        'rest_framework_simplejwt.authentication.JWTAuthentication',
+        'rest_framework.authentication.SessionAuthentication', 
+    ],
+    'DEFAULT_PERMISSION_CLASSES': [
+        'rest_framework.permissions.AllowAny', # Default is AllowAny
+    ],
     'PAGE_SIZE': 10
 }
 
