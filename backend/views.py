@@ -1273,6 +1273,25 @@ def s3_bucket_object_create(request):
         })
 
 
+class S3BucketObjectUpdateView(LoginRequiredMixin, DetailView):
+    template_name = 's3/update.html'
+    model = S3BucketObject
+    context_object_name = 'context_data'
+
+
+    def post(self, request, pk):
+        try:
+            s3_bucket_object = get_object_or_404(S3BucketObject, pk=pk)
+            s3_bucket_object.title = request.POST.get("title")
+            s3_bucket_object.save()
+
+            messages.success(request, "S3 Bucket object updated successfully.")
+            return redirect('s3_list')
+
+        except Exception as e:
+            messages.error(request, f"Failed to update: {str(e)}")
+            return redirect('s3_list')
+
 class S3BucketObjectListView(LoginRequiredMixin, ListView):
     model = S3BucketObject
     template_name = 's3/list.html'

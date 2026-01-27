@@ -66,6 +66,7 @@ urlpatterns = [
     path('s3/upload/', S3BucketObjectCreateView.as_view(), name="s3_upload"),
     path('s3/create/', s3_bucket_object_create, name="s3_bucket_object_create"),
     path('s3/list/', S3BucketObjectListView.as_view(), name="s3_list"),
+    path('s3/update/<int:pk>', S3BucketObjectUpdateView.as_view(), name="s3_bucket_object_update"),
     path('s3/delete/', S3BucketObjectDeleteView.as_view(), name="s3_bucket_object_delete"),
     path('s3/generate-presigned-url/', generate_presigned_url, name="generate_presigned_url"),
 ]
