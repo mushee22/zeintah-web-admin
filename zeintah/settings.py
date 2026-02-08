@@ -99,7 +99,8 @@ TEMPLATES = [
 CORS_ALLOWED_ORIGINS = [
     "http://127.0.0.1:3000",
     "http://localhost:3000",
-    "https://zeitnahacademy.com"
+    "https://zeitnahacademy.com",
+    "https://www.zeitnahacademy.com",
 ]
 
 CORS_ALLOW_METHODS = (
